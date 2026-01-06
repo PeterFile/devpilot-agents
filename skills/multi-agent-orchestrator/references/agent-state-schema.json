@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agent-state-schema.json",
+  "title": "Agent State",
+  "description": "Schema for AGENT_STATE.json used by multi-agent orchestrator",
+  "type": "object",
+  "required": [
+    "spec_path",
+    "session_name",
+    "tasks",
+    "review_findings",
+    "final_reports",
+    "blocked_items",
+    "pending_decisions",
+    "deferred_fixes",
+    "window_mapping"
+  ],
+  "properties": {
+    "spec_path": {
+      "type": "string",
+      "description": "Path to the spec directory"
+    },
+    "session_name": {
+      "type": "string",
+      "description": "Tmux session name"
+    },
+    "tasks": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/TaskResult" }
+    },
+    "review_findings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/ReviewFinding" }
+    },
+    "final_reports": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/FinalReport" }
+    },
+    "blocked_items": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/BlockedItem" }
+    },
+    "pending_decisions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/PendingDecision" }
+    },
+    "deferred_fixes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/DeferredFix" }
+    },
+    "window_mapping": {
+      "type": "object",
+      "description": "Maps task_id to tmux window_id",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "definitions": {
+    "TaskResult": {
+      "type": "object",
+      "required": ["task_id", "status"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "description": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["code", "ui", "review"]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "not_started",
+            "in_progress",
+            "pending_review",
+            "under_review",
+            "final_review",
+            "completed",
+            "blocked"
+          ]
+        },
+        "owner_agent": {
+          "type": "string",
+          "enum": ["kiro-cli", "gemini", "codex-review"]
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "criticality": {
+          "type": "string",
+          "enum": ["standard", "complex", "security-sensitive"]
+        },
+        "is_optional": { "type": "boolean" },
+        "exit_code": { "type": "integer" },
+        "output": { "type": "string" },
+        "error": { "type": "string" },
+        "files_changed": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "coverage": { "type": "string" },
+        "coverage_num": { "type": "number" },
+        "tests_passed": { "type": "integer" },
+        "tests_failed": { "type": "integer" },
+        "window_id": { "type": "string" },
+        "pane_id": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ReviewFinding": {
+      "type": "object",
+      "required": ["task_id", "reviewer", "severity", "summary", "created_at"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "reviewer": { "type": "string" },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "major", "minor", "none"]
+        },
+        "summary": { "type": "string" },
+        "details": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "FinalReport": {
+      "type": "object",
+      "required": ["task_id", "overall_severity", "summary", "finding_count", "created_at"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "overall_severity": {
+          "type": "string",
+          "enum": ["critical", "major", "minor", "none"]
+        },
+        "summary": { "type": "string" },
+        "finding_count": { "type": "integer" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "BlockedItem": {
+      "type": "object",
+      "required": ["task_id", "blocking_reason", "required_resolution", "created_at"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "blocking_reason": { "type": "string" },
+        "required_resolution": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "PendingDecision": {
+      "type": "object",
+      "required": ["id", "task_id", "context", "options", "created_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "task_id": { "type": "string" },
+        "context": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "DeferredFix": {
+      "type": "object",
+      "required": ["task_id", "description", "severity", "created_at"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "description": { "type": "string" },
+        "severity": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
