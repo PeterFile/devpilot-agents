@@ -182,40 +182,40 @@ This implementation plan extends the existing codeagent-wrapper with tmux visual
 - [x] 10. Checkpoint - Ensure all skill scripts work
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Create custom prompts for Codex
-  - [ ] 11.1 Create dispatch-task.md prompt
+- [x] 11. Create custom prompts for Codex
+  - [x] 11.1 Create dispatch-task.md prompt
     - Define argument hints and description
     - Include step-by-step dispatch instructions
     - _Requirements: 10.2_
 
-  - [ ] 11.2 Create spawn-review.md prompt
+  - [x] 11.2 Create spawn-review.md prompt
     - Define argument hints for task_id
     - Include review spawn instructions
     - _Requirements: 10.2_
 
-  - [ ] 11.3 Create sync-pulse.md prompt
+  - [x] 11.3 Create sync-pulse.md prompt
     - Define sync instructions
     - Include PULSE update steps
     - _Requirements: 10.2_
 
-  - [ ] 11.4 Create check-status.md prompt
+  - [x] 11.4 Create check-status.md prompt
     - Define status check instructions
     - Include state reading and reporting
     - _Requirements: 10.2_
 
-- [ ] 12. Integration testing
-  - [ ] 12.1 Create end-to-end test with sample spec
+- [x] 12. Integration testing
+  - [x] 12.1 Create end-to-end test with sample spec
     - Create test spec directory with requirements.md, design.md, tasks.md
     - Test full orchestration flow
     - Verify AGENT_STATE.json and PROJECT_PULSE.md updates
     - _Requirements: All_
 
-  - [ ] 12.2 Test tmux session persistence
+  - [x] 12.2 Test tmux session persistence
     - Verify session survives after codeagent-wrapper exits
     - Verify user can review task history in tmux
     - _Requirements: 12.9_
 
-- [ ] 13. Final checkpoint - Full system verification
+- [x] 13. Final checkpoint - Full system verification
   - Ensure all tests pass, ask the user if questions arise.
   - Verify codeagent-wrapper builds successfully
   - Verify skill installation works

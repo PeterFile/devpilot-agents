@@ -27,13 +27,34 @@ Coordinates kiro-cli (code) and Gemini (UI) agents within a tmux environment, wi
 - **Spec Phase**: User creates requirements.md, design.md, tasks.md in Kiro IDE
 - **Execution Phase**: Codex orchestrates workers via codeagent-wrapper
 
-## Commands
+## Usage
 
-- `$orchestrator start <spec_path>` - Initialize orchestration from spec directory
-- `$orchestrator dispatch` - Dispatch ready tasks to workers
-- `$orchestrator status` - Show current orchestration state
-- `$orchestrator review` - Spawn reviews for completed tasks
-- `$orchestrator sync` - Sync state to PULSE document
+Invoke this skill through natural language or helper scripts:
+
+### Natural Language Commands
+- "Start orchestration from spec at /path/to/specs"
+- "Dispatch task-001 to the appropriate worker"
+- "Show orchestration status"
+- "Spawn review for task-001"
+- "Sync state to PULSE document"
+
+### Helper Scripts
+```bash
+# Initialize orchestration (from repo root)
+python skills/multi-agent-orchestrator/scripts/init_orchestration.py /path/to/specs --session orchestration
+
+# Dispatch ready tasks
+python skills/multi-agent-orchestrator/scripts/dispatch_batch.py AGENT_STATE.json
+
+# Spawn reviews
+python skills/multi-agent-orchestrator/scripts/dispatch_reviews.py AGENT_STATE.json
+
+# Sync to PULSE
+python skills/multi-agent-orchestrator/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
+
+# Check status
+cat AGENT_STATE.json | jq '.tasks[] | {task_id, status}'
+```
 
 ## Workflow
 
@@ -68,28 +89,48 @@ not_started → in_progress → pending_review → under_review → final_review
 
 - `init_orchestration.py` - Initialize orchestration from spec directory
   ```bash
-  python scripts/init_orchestration.py <spec_path> [--session <name>]
+  python skills/multi-agent-orchestrator/scripts/init_orchestration.py <spec_path> [--session <name>]
   ```
 
 - `dispatch_batch.py` - Dispatch ready tasks to workers
   ```bash
-  python scripts/dispatch_batch.py <state_file> [--dry-run]
+  python skills/multi-agent-orchestrator/scripts/dispatch_batch.py <state_file> [--dry-run]
   ```
 
 - `dispatch_reviews.py` - Dispatch review tasks for completed work
   ```bash
-  python scripts/dispatch_reviews.py <state_file> [--dry-run]
+  python skills/multi-agent-orchestrator/scripts/dispatch_reviews.py <state_file> [--dry-run]
   ```
 
 - `spec_parser.py` - Parse tasks.md to extract task definitions
   ```bash
-  python scripts/spec_parser.py <spec_directory>
+  python skills/multi-agent-orchestrator/scripts/spec_parser.py <spec_directory>
   ```
 
 ### references/
 
 - `agent-state-schema.json` - JSON Schema for AGENT_STATE.json validation
 - `task-state-machine.md` - Task state transition documentation
+
+### references/prompts/
+
+Prompt templates for common orchestration commands:
+
+- `dispatch-task.md` - Dispatch a task to the appropriate worker agent
+  - Parameters: task_id (required), force (optional)
+  - See template for step-by-step dispatch instructions
+
+- `spawn-review.md` - Spawn a Review Codex instance for completed tasks
+  - Parameters: task_id (required), criticality (optional)
+  - See template for review spawn workflow
+
+- `sync-pulse.md` - Synchronize AGENT_STATE.json to PROJECT_PULSE.md
+  - Parameters: state_file (optional), pulse_file (optional)
+  - See template for PULSE update steps
+
+- `check-status.md` - Check and report current orchestration status
+  - Parameters: state_file (optional), format (optional), task_id (optional)
+  - See template for status reporting formats
 
 ## Integration with codeagent-wrapper
 
