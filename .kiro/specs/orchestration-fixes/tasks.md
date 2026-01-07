@@ -11,33 +11,33 @@ Implementation uses Python for orchestration scripts (consistent with existing c
 
 ## Tasks
 
-- [ ] 1. Fix Parent-Subtask Execution Model
-  - [ ] 1.1 Update get_ready_tasks() to filter out parent tasks
+- [x] 1. Fix Parent-Subtask Execution Model
+  - [x] 1.1 Update get_ready_tasks() to filter out parent tasks
     - Modify `spec_parser.py` to add `is_leaf_task()` helper
     - Update `get_ready_tasks()` to skip tasks with subtasks
     - _Requirements: 1.1, 1.2_
 
-  - [ ] 1.2 Write property test for leaf task filtering
+  - [x] 1.2 Write property test for leaf task filtering
     - **Property 1: Leaf Task Filtering**
     - **Validates: Requirements 1.1, 1.2**
 
-  - [ ] 1.3 Implement dependency expansion for parent tasks
+  - [x] 1.3 Implement dependency expansion for parent tasks
     - Add `expand_dependencies()` function to `spec_parser.py`
     - Expand parent task IDs to their subtask IDs recursively
     - Update `get_ready_tasks()` to use expanded dependencies
     - _Requirements: 1.6, 1.7, 5.1, 5.2, 5.4_
 
-  - [ ] 1.4 Write property test for dependency expansion
+  - [x] 1.4 Write property test for dependency expansion
     - **Property 3: Dependency Expansion**
     - **Validates: Requirements 1.6, 1.7, 5.1, 5.2, 5.4, 5.5**
 
-  - [ ] 1.5 Implement parent status aggregation
+  - [x] 1.5 Implement parent status aggregation
     - Add `update_parent_statuses()` function to `init_orchestration.py`
     - Derive parent status from subtask statuses
     - Call after each batch completion
     - _Requirements: 1.3, 1.4, 1.5_
 
-  - [ ] 1.6 Write property test for parent status aggregation
+  - [x] 1.6 Write property test for parent status aggregation
     - **Property 2: Parent Status Aggregation**
     - **Validates: Requirements 1.3, 1.4, 1.5**
 

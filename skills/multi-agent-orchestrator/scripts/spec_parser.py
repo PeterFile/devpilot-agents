@@ -375,13 +375,79 @@ def extract_dependencies(tasks: List[Task]) -> DependencyResult:
     )
 
 
+def expand_dependencies(dependencies: List[str], task_map: Dict[str, 'Task']) -> List[str]:
+    """
+    Expand parent task dependencies to their subtasks.
+    
+    If a dependency is a parent task, replace it with all its subtasks.
+    This ensures dependent tasks wait for ALL subtasks to complete.
+    
+    Handles nested subtasks (e.g., 1.1.1) correctly through recursive expansion.
+    
+    Requirements: 1.6, 1.7, 5.1, 5.2, 5.4
+    
+    Args:
+        dependencies: List of task IDs that are dependencies
+        task_map: Dictionary mapping task_id to Task object
+        
+    Returns:
+        List of expanded dependency IDs (leaf tasks only)
+    """
+    expanded = []
+    
+    for dep_id in dependencies:
+        dep_task = task_map.get(dep_id)
+        
+        if dep_task and dep_task.subtasks:
+            # Parent task: expand to all subtasks (recursively)
+            for subtask_id in dep_task.subtasks:
+                expanded.extend(expand_dependencies([subtask_id], task_map))
+        else:
+            # Leaf task or unknown: keep as-is
+            expanded.append(dep_id)
+    
+    # Remove duplicates while preserving order
+    return list(dict.fromkeys(expanded))
+
+
+def is_leaf_task(task: Task) -> bool:
+    """
+    Check if task is a leaf task (has no subtasks).
+    
+    A leaf task is the only type of task that can be dispatched for execution.
+    Parent tasks act as containers and their status is derived from subtasks.
+    
+    Requirements: 1.1, 1.2
+    """
+    return len(task.subtasks) == 0
+
+
 def get_ready_tasks(tasks: List[Task], completed_ids: Set[str]) -> List[Task]:
-    """Get tasks ready to execute (all dependencies satisfied)."""
+    """
+    Get leaf tasks ready to execute (all dependencies satisfied).
+    
+    Rules:
+    1. Task must be a leaf task (no subtasks) - Req 1.1, 1.2
+    2. Task must not be completed
+    3. All dependencies must be satisfied (including expanded parent deps) - Req 1.6, 1.7
+    
+    Requirements: 1.1, 1.2, 1.6, 1.7, 5.1, 5.2, 5.4
+    """
     ready = []
+    task_map = {t.task_id: t for t in tasks}
+    
     for task in tasks:
+        # Skip parent tasks (they have subtasks) - Req 1.1, 1.2
+        if not is_leaf_task(task):
+            continue
+        
+        # Skip completed tasks
         if task.task_id in completed_ids or task.status == TaskStatus.COMPLETED:
             continue
-        if all(dep in completed_ids for dep in task.dependencies):
+        
+        # Expand and check dependencies - Req 1.6, 1.7, 5.1, 5.2
+        expanded_deps = expand_dependencies(task.dependencies, task_map)
+        if all(dep in completed_ids for dep in expanded_deps):
             ready.append(task)
     return ready
 

@@ -137,6 +137,63 @@ def convert_task_to_entry(task: Task) -> TaskEntry:
     )
 
 
+def update_parent_statuses(state: Dict[str, Any]) -> None:
+    """
+    Update parent task statuses based on subtask completion.
+    
+    This function derives parent task status from the statuses of its subtasks.
+    It should be called after each batch completion to keep parent statuses in sync.
+    
+    Rules (in priority order):
+    - All subtasks completed → parent completed
+    - Any subtask blocked → parent blocked
+    - Any subtask fix_required → parent fix_required
+    - Any subtask in_progress/pending_review/under_review/final_review → parent in_progress
+    - Otherwise → parent not_started
+    
+    Requirements: 1.3, 1.4, 1.5
+    
+    Args:
+        state: The AGENT_STATE dictionary containing tasks
+    """
+    # Build task map for quick lookup
+    task_map = {t["task_id"]: t for t in state.get("tasks", [])}
+    
+    # Process tasks in reverse order to handle nested hierarchies
+    # (children before parents)
+    for task in reversed(state.get("tasks", [])):
+        subtask_ids = task.get("subtasks", [])
+        if not subtask_ids:
+            continue  # Leaf task, skip
+        
+        # Get subtask statuses
+        subtask_statuses = []
+        for sid in subtask_ids:
+            if sid in task_map:
+                subtask_statuses.append(task_map[sid].get("status", "not_started"))
+        
+        if not subtask_statuses:
+            continue  # No valid subtasks found
+        
+        # Determine parent status from subtask statuses (Req 1.3, 1.4, 1.5)
+        if all(s == "completed" for s in subtask_statuses):
+            # All subtasks completed → parent completed (Req 1.3)
+            task["status"] = "completed"
+        elif any(s == "blocked" for s in subtask_statuses):
+            # Any subtask blocked → parent blocked (Req 1.5)
+            task["status"] = "blocked"
+        elif any(s == "fix_required" for s in subtask_statuses):
+            # Any subtask fix_required → parent fix_required
+            task["status"] = "fix_required"
+        elif any(s in ["in_progress", "pending_review", "under_review", "final_review"] 
+                 for s in subtask_statuses):
+            # Any subtask in progress → parent in_progress (Req 1.4)
+            task["status"] = "in_progress"
+        else:
+            # Otherwise → parent not_started
+            task["status"] = "not_started"
+
+
 def extract_mental_model_from_design(design_path: str) -> Dict[str, str]:
     """
     Extract mental model from design.md for PROJECT_PULSE.md.

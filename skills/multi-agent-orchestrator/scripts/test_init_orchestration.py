@@ -571,3 +571,284 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"✅ All {len(tests)} tests passed!")
+
+
+# ============================================================================
+# Property Tests for Parent Status Aggregation
+# Feature: orchestration-fixes
+# Property 2: Parent Status Aggregation
+# Validates: Requirements 1.3, 1.4, 1.5
+# ============================================================================
+
+from init_orchestration import update_parent_statuses
+
+
+@st.composite
+def parent_with_subtasks_state_strategy(draw):
+    """Generate a state with parent tasks and subtasks."""
+    num_parents = draw(st.integers(min_value=1, max_value=3))
+    
+    tasks = []
+    
+    for p in range(1, num_parents + 1):
+        parent_id = str(p)
+        num_subtasks = draw(st.integers(min_value=1, max_value=4))
+        subtask_ids = [f"{parent_id}.{s}" for s in range(1, num_subtasks + 1)]
+        
+        # Create parent task
+        parent = {
+            "task_id": parent_id,
+            "description": f"Parent task {parent_id}",
+            "status": "not_started",
+            "subtasks": subtask_ids,
+        }
+        tasks.append(parent)
+        
+        # Create subtasks with random statuses
+        subtask_statuses = []
+        for sid in subtask_ids:
+            status = draw(st.sampled_from([
+                "not_started", "in_progress", "pending_review", 
+                "under_review", "final_review", "completed", "blocked"
+            ]))
+            subtask_statuses.append(status)
+            subtask = {
+                "task_id": sid,
+                "description": f"Subtask {sid}",
+                "status": status,
+                "parent_id": parent_id,
+                "subtasks": [],
+            }
+            tasks.append(subtask)
+    
+    return {"tasks": tasks}
+
+
+@st.composite
+def all_completed_subtasks_strategy(draw):
+    """Generate a state where all subtasks are completed."""
+    parent_id = "1"
+    num_subtasks = draw(st.integers(min_value=1, max_value=4))
+    subtask_ids = [f"{parent_id}.{s}" for s in range(1, num_subtasks + 1)]
+    
+    tasks = [
+        {
+            "task_id": parent_id,
+            "description": "Parent task",
+            "status": "not_started",
+            "subtasks": subtask_ids,
+        }
+    ]
+    
+    for sid in subtask_ids:
+        tasks.append({
+            "task_id": sid,
+            "description": f"Subtask {sid}",
+            "status": "completed",
+            "parent_id": parent_id,
+            "subtasks": [],
+        })
+    
+    return {"tasks": tasks, "parent_id": parent_id}
+
+
+@st.composite
+def some_in_progress_subtasks_strategy(draw):
+    """Generate a state where some subtasks are in progress."""
+    parent_id = "1"
+    num_subtasks = draw(st.integers(min_value=2, max_value=4))
+    subtask_ids = [f"{parent_id}.{s}" for s in range(1, num_subtasks + 1)]
+    
+    tasks = [
+        {
+            "task_id": parent_id,
+            "description": "Parent task",
+            "status": "not_started",
+            "subtasks": subtask_ids,
+        }
+    ]
+    
+    # At least one in_progress, rest can be anything except blocked
+    in_progress_statuses = ["in_progress", "pending_review", "under_review", "final_review"]
+    
+    for i, sid in enumerate(subtask_ids):
+        if i == 0:
+            status = draw(st.sampled_from(in_progress_statuses))
+        else:
+            status = draw(st.sampled_from(["not_started", "completed"] + in_progress_statuses))
+        
+        tasks.append({
+            "task_id": sid,
+            "description": f"Subtask {sid}",
+            "status": status,
+            "parent_id": parent_id,
+            "subtasks": [],
+        })
+    
+    return {"tasks": tasks, "parent_id": parent_id}
+
+
+@st.composite
+def some_blocked_subtasks_strategy(draw):
+    """Generate a state where some subtasks are blocked."""
+    parent_id = "1"
+    num_subtasks = draw(st.integers(min_value=2, max_value=4))
+    subtask_ids = [f"{parent_id}.{s}" for s in range(1, num_subtasks + 1)]
+    
+    tasks = [
+        {
+            "task_id": parent_id,
+            "description": "Parent task",
+            "status": "not_started",
+            "subtasks": subtask_ids,
+        }
+    ]
+    
+    # At least one blocked
+    for i, sid in enumerate(subtask_ids):
+        if i == 0:
+            status = "blocked"
+        else:
+            status = draw(st.sampled_from(["not_started", "in_progress", "completed"]))
+        
+        tasks.append({
+            "task_id": sid,
+            "description": f"Subtask {sid}",
+            "status": status,
+            "parent_id": parent_id,
+            "subtasks": [],
+        })
+    
+    return {"tasks": tasks, "parent_id": parent_id}
+
+
+@given(state=all_completed_subtasks_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_2_parent_status_all_completed(state):
+    """
+    Property 2: Parent Status Aggregation - All completed
+    
+    For any parent task where ALL subtasks are completed,
+    update_parent_statuses SHALL set the parent status to "completed".
+    
+    Feature: orchestration-fixes, Property 2
+    Validates: Requirements 1.3
+    """
+    parent_id = state["parent_id"]
+    
+    # Update parent statuses
+    update_parent_statuses(state)
+    
+    # Find parent task
+    parent = next(t for t in state["tasks"] if t["task_id"] == parent_id)
+    
+    assert parent["status"] == "completed", \
+        f"Parent with all completed subtasks should be completed, got {parent['status']}"
+
+
+@given(state=some_in_progress_subtasks_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_2_parent_status_in_progress(state):
+    """
+    Property 2: Parent Status Aggregation - In progress
+    
+    For any parent task where ANY subtask is in_progress/pending_review/under_review/final_review
+    (and none are blocked), update_parent_statuses SHALL set the parent status to "in_progress".
+    
+    Feature: orchestration-fixes, Property 2
+    Validates: Requirements 1.4
+    """
+    parent_id = state["parent_id"]
+    
+    # Update parent statuses
+    update_parent_statuses(state)
+    
+    # Find parent task
+    parent = next(t for t in state["tasks"] if t["task_id"] == parent_id)
+    
+    # Check if any subtask is blocked (which takes priority)
+    subtask_statuses = [t["status"] for t in state["tasks"] if t.get("parent_id") == parent_id]
+    has_blocked = any(s == "blocked" for s in subtask_statuses)
+    
+    if has_blocked:
+        assert parent["status"] == "blocked", \
+            f"Parent with blocked subtask should be blocked, got {parent['status']}"
+    else:
+        assert parent["status"] == "in_progress", \
+            f"Parent with in_progress subtasks should be in_progress, got {parent['status']}"
+
+
+@given(state=some_blocked_subtasks_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_2_parent_status_blocked(state):
+    """
+    Property 2: Parent Status Aggregation - Blocked
+    
+    For any parent task where ANY subtask is blocked,
+    update_parent_statuses SHALL set the parent status to "blocked".
+    
+    Feature: orchestration-fixes, Property 2
+    Validates: Requirements 1.5
+    """
+    parent_id = state["parent_id"]
+    
+    # Update parent statuses
+    update_parent_statuses(state)
+    
+    # Find parent task
+    parent = next(t for t in state["tasks"] if t["task_id"] == parent_id)
+    
+    assert parent["status"] == "blocked", \
+        f"Parent with blocked subtask should be blocked, got {parent['status']}"
+
+
+@given(state=parent_with_subtasks_state_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_2_parent_status_aggregation_rules(state):
+    """
+    Property 2: Parent Status Aggregation - Full rules
+    
+    For any parent task, update_parent_statuses SHALL derive status from subtasks:
+    - All completed → completed
+    - Any blocked → blocked
+    - Any in_progress/pending_review/under_review/final_review → in_progress
+    - Otherwise → not_started
+    
+    Feature: orchestration-fixes, Property 2
+    Validates: Requirements 1.3, 1.4, 1.5
+    """
+    # Update parent statuses
+    update_parent_statuses(state)
+    
+    # Verify each parent task
+    for task in state["tasks"]:
+        subtask_ids = task.get("subtasks", [])
+        if not subtask_ids:
+            continue  # Skip leaf tasks
+        
+        # Get subtask statuses
+        subtask_statuses = []
+        for t in state["tasks"]:
+            if t["task_id"] in subtask_ids:
+                subtask_statuses.append(t["status"])
+        
+        if not subtask_statuses:
+            continue
+        
+        # Verify parent status follows the rules
+        if all(s == "completed" for s in subtask_statuses):
+            assert task["status"] == "completed", \
+                f"Parent {task['task_id']} with all completed subtasks should be completed"
+        elif any(s == "blocked" for s in subtask_statuses):
+            assert task["status"] == "blocked", \
+                f"Parent {task['task_id']} with blocked subtask should be blocked"
+        elif any(s == "fix_required" for s in subtask_statuses):
+            assert task["status"] == "fix_required", \
+                f"Parent {task['task_id']} with fix_required subtask should be fix_required"
+        elif any(s in ["in_progress", "pending_review", "under_review", "final_review"] 
+                 for s in subtask_statuses):
+            assert task["status"] == "in_progress", \
+                f"Parent {task['task_id']} with in_progress subtask should be in_progress"
+        else:
+            assert task["status"] == "not_started", \
+                f"Parent {task['task_id']} with all not_started subtasks should be not_started"
