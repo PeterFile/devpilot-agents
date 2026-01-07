@@ -25,6 +25,9 @@ from typing import List, Dict, Optional, Any, Set
 # Add script directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Import update_parent_statuses for parent status aggregation (Req 1.3, 1.4, 1.5)
+from init_orchestration import update_parent_statuses
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -583,6 +586,9 @@ def dispatch_batch(
                 
                 # Log batch failure
                 logger.error(f"Batch {batch_idx + 1} failed: {report.errors}")
+            
+            # Update parent statuses after each batch (Req 1.3, 1.4, 1.5)
+            update_parent_statuses(state)
             
             # Save state after each batch
             save_agent_state(state_file, state)

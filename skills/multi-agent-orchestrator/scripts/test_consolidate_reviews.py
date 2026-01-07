@@ -246,16 +246,23 @@ def test_overall_severity_is_highest(findings):
 @settings(max_examples=100, deadline=None)
 def test_consolidation_marks_task_completed(state):
     """
-    Test that consolidation with auto_complete marks task as completed.
+    Test that consolidation with auto_complete marks task as completed
+    when severity is minor or none. Tasks with critical/major severity
+    enter the fix loop instead.
     
     Feature: multi-agent-orchestration, Property 10
-    Validates: Requirements 8.9
+    Validates: Requirements 8.9, 3.1, 4.6
     """
     tasks_in_final_review = get_tasks_in_final_review(state)
     assume(len(tasks_in_final_review) > 0)
     
     task = tasks_in_final_review[0]
     task_id = task["task_id"]
+    
+    # Get findings to determine expected outcome
+    findings = get_review_findings_for_task(state, task_id)
+    severities = [f.get("severity", "none") for f in findings]
+    has_critical_or_major = "critical" in severities or "major" in severities
     
     # Consolidate with auto_complete=True
     report = consolidate_single_task(state, task_id, auto_complete=True)
@@ -269,10 +276,17 @@ def test_consolidation_marks_task_completed(state):
     )
     
     assert updated_task is not None
-    assert updated_task["status"] == "completed", \
-        f"Task should be marked completed after consolidation, got {updated_task['status']}"
-    assert "completed_at" in updated_task, \
-        "Task should have completed_at timestamp"
+    
+    if has_critical_or_major:
+        # Tasks with critical/major severity enter fix loop (Req 3.1, 4.6)
+        assert updated_task["status"] == "fix_required", \
+            f"Task with critical/major severity should enter fix_required, got {updated_task['status']}"
+    else:
+        # Tasks with minor/none severity are completed
+        assert updated_task["status"] == "completed", \
+            f"Task with minor/none severity should be completed, got {updated_task['status']}"
+        assert "completed_at" in updated_task, \
+            "Task should have completed_at timestamp"
 
 
 @given(state=agent_state_with_final_review_tasks_strategy())
@@ -401,7 +415,7 @@ def test_consolidate_reviews_file_integration():
         # Verify final reports
         assert len(updated_state["final_reports"]) == 2
         
-        # Check task-001 report
+        # Check task-001 report (minor severity - should be completed)
         report1 = next(
             (r for r in updated_state["final_reports"] if r["task_id"] == "task-001"),
             None
@@ -419,10 +433,17 @@ def test_consolidate_reviews_file_integration():
         assert report2["overall_severity"] == "major"
         assert report2["finding_count"] == 2
         
-        # Verify tasks are completed
-        for task in updated_state["tasks"]:
-            assert task["status"] == "completed", \
-                f"Task {task['task_id']} should be completed"
+        # Verify task statuses based on severity (Req 3.1, 4.6)
+        task1 = next(t for t in updated_state["tasks"] if t["task_id"] == "task-001")
+        task2 = next(t for t in updated_state["tasks"] if t["task_id"] == "task-002")
+        
+        # task-001 has minor severity - should be completed
+        assert task1["status"] == "completed", \
+            f"Task task-001 with minor severity should be completed, got {task1['status']}"
+        
+        # task-002 has major severity - should enter fix loop
+        assert task2["status"] == "fix_required", \
+            f"Task task-002 with major severity should enter fix_required, got {task2['status']}"
 
 
 def test_consolidate_no_tasks():

@@ -23,6 +23,9 @@ from typing import List, Dict, Optional, Any, Set
 # Add script directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Import fix loop functions for review completion handling (Req 3.1, 4.6)
+from fix_loop import on_review_complete, should_enter_fix_loop
+
 
 # Review count by criticality (Requirement 8.5, 8.6)
 REVIEW_COUNT_BY_CRITICALITY = {

@@ -27,6 +27,20 @@ from spec_parser import parse_tasks, validate_spec_directory, TaskStatus, TaskTy
 from init_orchestration import initialize_orchestration, AGENT_BY_TASK_TYPE
 from dispatch_batch import dispatch_batch, get_ready_tasks, build_task_configs, load_agent_state
 from sync_pulse import sync_pulse_files, parse_pulse, generate_pulse
+from fix_loop import (
+    enter_fix_loop,
+    evaluate_fix_loop_action,
+    process_fix_loop,
+    on_fix_task_complete,
+    on_review_complete,
+    handle_fix_loop_success,
+    trigger_human_fallback,
+    get_fix_required_tasks,
+    FixLoopAction,
+    MAX_FIX_ATTEMPTS,
+    ESCALATION_THRESHOLD,
+)
+from consolidate_reviews import consolidate_single_task
 
 
 # Sample spec content for testing
@@ -677,6 +691,405 @@ class TestE2EOrchestration:
             assert "2" not in ready_ids, "Task 2 should not be ready (depends on task 1)"
             assert "3" not in ready_ids, "Task 3 should not be ready (depends on task 2)"
 
+    # =========================================================================
+    # Fix Loop Integration Tests
+    # =========================================================================
+    
+    def test_fix_loop_initial_review_failure_to_fix_to_success(self):
+        """
+        Test fix loop workflow: initial review failure → fix → re-review → success.
+        
+        Requirements: 3.1, 3.5, 3.9, 4.6
+        """
+        # Create initial state with a task in final_review
+        state = {
+            "spec_path": "/test/spec",
+            "session_name": "fix-loop-test",
+            "tasks": [
+                {
+                    "task_id": "task-001",
+                    "description": "Implement feature",
+                    "status": "final_review",
+                    "type": "code",
+                    "owner_agent": "kiro-cli",
+                    "dependencies": [],
+                    "criticality": "standard",
+                },
+                {
+                    "task_id": "task-002",
+                    "description": "Dependent task",
+                    "status": "not_started",
+                    "type": "code",
+                    "owner_agent": "kiro-cli",
+                    "dependencies": ["task-001"],
+                    "criticality": "standard",
+                },
+            ],
+            "review_findings": [
+                {
+                    "task_id": "task-001",
+                    "reviewer": "review-task-001-1",
+                    "severity": "major",
+                    "summary": "Found bug in implementation",
+                    "details": "The function doesn't handle edge cases",
+                    "created_at": "2026-01-07T10:00:00Z",
+                },
+            ],
+            "final_reports": [],
+            "blocked_items": [],
+            "pending_decisions": [],
+            "deferred_fixes": [],
+            "window_mapping": {},
+        }
+        
+        # Step 1: Consolidate review - should enter fix loop due to major severity
+        report = consolidate_single_task(state, "task-001", auto_complete=True)
+        
+        assert report is not None
+        assert report.overall_severity == "major"
+        
+        # Verify task entered fix loop
+        task = next(t for t in state["tasks"] if t["task_id"] == "task-001")
+        assert task["status"] == "fix_required", \
+            f"Task should be in fix_required status, got {task['status']}"
+        assert task.get("fix_attempts", 0) == 0, \
+            "fix_attempts should be 0 (no fix completed yet)"
+        assert len(task.get("review_history", [])) == 1, \
+            "Should have 1 review history entry"
+        
+        # Verify dependent task is blocked
+        dep_task = next(t for t in state["tasks"] if t["task_id"] == "task-002")
+        assert dep_task["status"] == "blocked", \
+            f"Dependent task should be blocked, got {dep_task['status']}"
+        assert dep_task.get("blocked_by") == "task-001"
+        
+        # Step 2: Process fix loop - should create fix request
+        fix_requests = process_fix_loop(state)
+        
+        assert len(fix_requests) == 1, "Should have 1 fix request"
+        fix_req = fix_requests[0]
+        assert fix_req["task_id"] == "task-001"
+        assert not fix_req["use_escalation"], "Should not escalate on first attempt"
+        
+        # Verify task is now in_progress
+        task = next(t for t in state["tasks"] if t["task_id"] == "task-001")
+        assert task["status"] == "in_progress"
+        
+        # Step 3: Simulate fix completion
+        on_fix_task_complete(state, "task-001")
+        
+        task = next(t for t in state["tasks"] if t["task_id"] == "task-001")
+        assert task["fix_attempts"] == 1, "fix_attempts should be 1 after first fix"
+        assert task["status"] == "pending_review"
+        
+        # Step 4: Simulate successful re-review
+        on_review_complete(state, "task-001", [
+            {"severity": "none", "summary": "All issues fixed"}
+        ])
+        
+        task = next(t for t in state["tasks"] if t["task_id"] == "task-001")
+        assert task["status"] == "final_review", \
+            f"Task should be in final_review after passing review, got {task['status']}"
+        
+        # Verify dependent task is unblocked
+        dep_task = next(t for t in state["tasks"] if t["task_id"] == "task-002")
+        assert dep_task["status"] == "not_started", \
+            f"Dependent task should be unblocked, got {dep_task['status']}"
+        assert dep_task.get("blocked_by") is None
+        
+        print("✅ Fix loop: initial failure → fix → success workflow completed")
+    
+    def test_fix_loop_escalation_after_2_failures(self):
+        """
+        Test fix loop escalation after 2 failed fix attempts.
+        
+        Requirements: 3.3, 3.6
+        """
+        # Create state with task that has already had 2 failed fix attempts
+        state = {
+            "spec_path": "/test/spec",
+            "session_name": "escalation-test",
+            "tasks": [
+                {
+                    "task_id": "task-001",
+                    "description": "Implement feature",
+                    "status": "fix_required",
+                    "type": "code",
+                    "owner_agent": "kiro-cli",
+                    "dependencies": [],
+                    "criticality": "standard",
+                    "fix_attempts": 2,  # 2 completed fix attempts
+                    "last_review_severity": "major",
+                    "review_history": [
+                        {
+                            "attempt": 0,
+                            "severity": "major",
+                            "findings": [{"severity": "major", "summary": "Initial bug"}],
+                            "reviewed_at": "2026-01-07T10:00:00Z",
+                        },
+                        {
+                            "attempt": 1,
+                            "severity": "major",
+                            "findings": [{"severity": "major", "summary": "Bug still present"}],
+                            "reviewed_at": "2026-01-07T11:00:00Z",
+                        },
+                        {
+                            "attempt": 2,
+                            "severity": "major",
+                            "findings": [{"severity": "major", "summary": "Bug persists"}],
+                            "reviewed_at": "2026-01-07T12:00:00Z",
+                        },
+                    ],
+                },
+            ],
+            "review_findings": [],
+            "final_reports": [],
+            "blocked_items": [],
+            "pending_decisions": [],
+            "deferred_fixes": [],
+            "window_mapping": {},
+        }
+        
+        # Evaluate action - should escalate
+        task = state["tasks"][0]
+        action = evaluate_fix_loop_action(task, "major")
+        
+        assert action == FixLoopAction.ESCALATE, \
+            f"Should escalate after 2 failed attempts, got {action}"
+        
+        # Process fix loop - should create escalated fix request
+        fix_requests = process_fix_loop(state)
+        
+        assert len(fix_requests) == 1
+        fix_req = fix_requests[0]
+        assert fix_req["use_escalation"], "Should use escalation agent"
+        assert fix_req["backend"] == "codex", "Should use codex backend for escalation"
+        
+        # Verify task is marked as escalated
+        task = state["tasks"][0]
+        assert task.get("escalated") is True
+        assert task.get("escalated_at") is not None
+        assert task.get("original_agent") == "kiro-cli"
+        
+        print("✅ Fix loop: escalation after 2 failures workflow completed")
+    
+    def test_fix_loop_human_fallback_after_3_failures(self):
+        """
+        Test fix loop human fallback after 3 failed fix attempts.
+        
+        Requirements: 3.7, 3.8
+        """
+        # Create state with task that has already had 3 failed fix attempts
+        state = {
+            "spec_path": "/test/spec",
+            "session_name": "human-fallback-test",
+            "tasks": [
+                {
+                    "task_id": "task-001",
+                    "description": "Implement feature",
+                    "status": "fix_required",
+                    "type": "code",
+                    "owner_agent": "kiro-cli",
+                    "dependencies": [],
+                    "criticality": "standard",
+                    "fix_attempts": 3,  # 3 completed fix attempts (max)
+                    "last_review_severity": "critical",
+                    "escalated": True,
+                    "review_history": [
+                        {
+                            "attempt": 0,
+                            "severity": "critical",
+                            "findings": [{"severity": "critical", "summary": "Security issue"}],
+                            "reviewed_at": "2026-01-07T10:00:00Z",
+                        },
+                        {
+                            "attempt": 1,
+                            "severity": "critical",
+                            "findings": [{"severity": "critical", "summary": "Issue not fixed"}],
+                            "reviewed_at": "2026-01-07T11:00:00Z",
+                        },
+                        {
+                            "attempt": 2,
+                            "severity": "critical",
+                            "findings": [{"severity": "critical", "summary": "Still broken"}],
+                            "reviewed_at": "2026-01-07T12:00:00Z",
+                        },
+                        {
+                            "attempt": 3,
+                            "severity": "critical",
+                            "findings": [{"severity": "critical", "summary": "Cannot fix"}],
+                            "reviewed_at": "2026-01-07T13:00:00Z",
+                        },
+                    ],
+                },
+                {
+                    "task_id": "task-002",
+                    "description": "Dependent task",
+                    "status": "not_started",
+                    "type": "code",
+                    "owner_agent": "kiro-cli",
+                    "dependencies": ["task-001"],
+                    "criticality": "standard",
+                },
+            ],
+            "review_findings": [],
+            "final_reports": [],
+            "blocked_items": [],
+            "pending_decisions": [],
+            "deferred_fixes": [],
+            "window_mapping": {},
+        }
+        
+        # Evaluate action - should trigger human fallback
+        task = state["tasks"][0]
+        action = evaluate_fix_loop_action(task, "critical")
+        
+        assert action == FixLoopAction.HUMAN_FALLBACK, \
+            f"Should trigger human fallback after 3 failed attempts, got {action}"
+        
+        # Process fix loop - should trigger human fallback
+        fix_requests = process_fix_loop(state)
+        
+        # No fix requests should be created (human fallback instead)
+        assert len(fix_requests) == 0, "Should not create fix request for human fallback"
+        
+        # Verify task is blocked with human intervention required
+        task = state["tasks"][0]
+        assert task["status"] == "blocked"
+        assert task.get("blocked_reason") == "human_intervention_required"
+        
+        # Verify pending decision was created
+        assert len(state["pending_decisions"]) == 1
+        decision = state["pending_decisions"][0]
+        assert decision["task_id"] == "task-001"
+        assert decision["priority"] == "critical"
+        assert "HUMAN INTERVENTION REQUIRED" in decision["context"]
+        assert len(decision["options"]) == 3
+        
+        # Verify dependent task is blocked
+        dep_task = next(t for t in state["tasks"] if t["task_id"] == "task-002")
+        assert dep_task["status"] == "blocked"
+        
+        print("✅ Fix loop: human fallback after 3 failures workflow completed")
+    
+    def test_fix_loop_full_workflow_with_file_state(self):
+        """
+        Integration test: Full fix loop workflow with actual file operations.
+        
+        Requirements: All fix loop requirements
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / "AGENT_STATE.json"
+            
+            # Create initial state
+            state = {
+                "spec_path": "/test/spec",
+                "session_name": "full-fix-loop-test",
+                "tasks": [
+                    {
+                        "task_id": "task-001",
+                        "description": "Implement authentication",
+                        "status": "final_review",
+                        "type": "code",
+                        "owner_agent": "kiro-cli",
+                        "dependencies": [],
+                        "criticality": "security-sensitive",
+                    },
+                    {
+                        "task_id": "task-002",
+                        "description": "Implement UI",
+                        "status": "not_started",
+                        "type": "ui",
+                        "owner_agent": "gemini",
+                        "dependencies": ["task-001"],
+                        "criticality": "standard",
+                    },
+                ],
+                "review_findings": [
+                    {
+                        "task_id": "task-001",
+                        "reviewer": "review-task-001-1",
+                        "severity": "critical",
+                        "summary": "SQL injection vulnerability",
+                        "details": "User input not sanitized",
+                        "created_at": "2026-01-07T10:00:00Z",
+                    },
+                    {
+                        "task_id": "task-001",
+                        "reviewer": "review-task-001-2",
+                        "severity": "major",
+                        "summary": "Missing input validation",
+                        "details": "Password requirements not enforced",
+                        "created_at": "2026-01-07T10:00:00Z",
+                    },
+                ],
+                "final_reports": [],
+                "blocked_items": [],
+                "pending_decisions": [],
+                "deferred_fixes": [],
+                "window_mapping": {},
+            }
+            
+            with open(state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=2)
+            
+            # Step 1: Consolidate - should enter fix loop
+            with open(state_file, encoding='utf-8') as f:
+                state = json.load(f)
+            
+            report = consolidate_single_task(state, "task-001", auto_complete=True)
+            
+            with open(state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=2)
+            
+            assert report.overall_severity == "critical"
+            
+            # Verify state after consolidation
+            with open(state_file, encoding='utf-8') as f:
+                state = json.load(f)
+            
+            task = next(t for t in state["tasks"] if t["task_id"] == "task-001")
+            assert task["status"] == "fix_required"
+            
+            dep_task = next(t for t in state["tasks"] if t["task_id"] == "task-002")
+            assert dep_task["status"] == "blocked"
+            
+            # Step 2: Process fix loop
+            fix_requests = process_fix_loop(state)
+            
+            with open(state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=2)
+            
+            assert len(fix_requests) == 1
+            
+            # Step 3: Simulate fix completion
+            on_fix_task_complete(state, "task-001")
+            
+            with open(state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=2)
+            
+            # Step 4: Simulate successful review
+            on_review_complete(state, "task-001", [
+                {"severity": "none", "summary": "All security issues fixed"}
+            ])
+            
+            with open(state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=2)
+            
+            # Verify final state
+            with open(state_file, encoding='utf-8') as f:
+                final_state = json.load(f)
+            
+            task = next(t for t in final_state["tasks"] if t["task_id"] == "task-001")
+            assert task["status"] == "final_review"
+            assert task["fix_attempts"] == 1
+            
+            dep_task = next(t for t in final_state["tasks"] if t["task_id"] == "task-002")
+            assert dep_task["status"] == "not_started", \
+                f"Dependent task should be unblocked, got {dep_task['status']}"
+            
+            print("✅ Full fix loop workflow with file state completed")
+
 
 def run_tests():
     """Run all end-to-end tests."""
@@ -696,6 +1109,11 @@ def run_tests():
         ("Full Orchestration Flow", test_instance.test_full_orchestration_flow),
         ("Agent Assignment by Task Type", test_instance.test_agent_assignment_by_task_type),
         ("Dependency Tracking", test_instance.test_dependency_tracking),
+        # Fix Loop Integration Tests
+        ("Fix Loop: Initial Failure → Fix → Success", test_instance.test_fix_loop_initial_review_failure_to_fix_to_success),
+        ("Fix Loop: Escalation After 2 Failures", test_instance.test_fix_loop_escalation_after_2_failures),
+        ("Fix Loop: Human Fallback After 3 Failures", test_instance.test_fix_loop_human_fallback_after_3_failures),
+        ("Fix Loop: Full Workflow with File State", test_instance.test_fix_loop_full_workflow_with_file_state),
     ]
     
     print("=" * 60)

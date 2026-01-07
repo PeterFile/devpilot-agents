@@ -1,4 +1,4 @@
-# Implementation Plan: Orchestration Fixes
+ # Implementation Plan: Orchestration Fixes
 
 ## Overview
 
@@ -76,7 +76,7 @@ Implementation uses Python for orchestration scripts (consistent with existing c
     - Add logging for conflict warnings
     - _Requirements: 2.3, 2.4, 2.5, 2.6, 2.7_
 
-- [ ] 4. Checkpoint - Ensure file conflict detection tests pass
+- [x] 4. Checkpoint - Ensure file conflict detection tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 5. Implement Fix Loop Workflow
@@ -146,32 +146,32 @@ Implementation uses Python for orchestration scripts (consistent with existing c
     - Block dependent tasks
     - _Requirements: 3.7, 3.8_
 
-- [ ] 6. Checkpoint - Ensure fix loop tests pass
+- [x] 6. Checkpoint - Ensure fix loop tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Integration and wiring
-  - [ ] 7.1 Integrate parent status updates into orchestration flow
+- [x] 7. Integration and wiring
+  - [x] 7.1 Integrate parent status updates into orchestration flow
     - Call `update_parent_statuses()` after each batch in `dispatch_batch.py`
     - _Requirements: 1.3, 1.4, 1.5_
 
-  - [ ] 7.2 Integrate fix loop into review dispatch flow
+  - [x] 7.2 Integrate fix loop into review dispatch flow
     - Update `dispatch_reviews.py` to call `on_review_complete()`
     - Update `consolidate_reviews.py` to trigger fix loop on critical/major
     - _Requirements: 3.1, 4.6_
 
-  - [ ] 7.3 Update agent-state-schema.json
+  - [x] 7.3 Update agent-state-schema.json
     - Add new task fields (writes, reads, fix_attempts, etc.)
     - Add fix_required to status enum
     - Update review_history structure
     - _Requirements: All_
 
-  - [ ] 7.4 Write integration test for full fix loop workflow
+  - [x] 7.4 Write integration test for full fix loop workflow
     - Test initial review failure → fix → re-review → success
     - Test escalation after 2 failures
     - Test human fallback after 3 failures
     - _Requirements: All fix loop requirements_
 
-- [ ] 8. Final checkpoint - Full system verification
+- [x] 8. Final checkpoint - Full system verification
   - Ensure all tests pass, ask the user if questions arise.
   - Verify parent-subtask model works correctly
   - Verify file conflict detection prevents parallel conflicts

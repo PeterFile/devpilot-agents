@@ -21,6 +21,9 @@ from typing import List, Dict, Any, Optional
 # Add script directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Import fix loop functions for triggering fix loop on critical/major (Req 3.1, 4.6)
+from fix_loop import enter_fix_loop, should_enter_fix_loop
+
 
 # Severity ordering (highest to lowest)
 SEVERITY_ORDER = ["critical", "major", "minor", "none"]
@@ -251,8 +254,12 @@ def consolidate_reviews(
         reports_created += 1
         consolidated_task_ids.append(task_id)
         
-        # Optionally mark task as completed
-        if auto_complete:
+        # Check if fix loop is needed (Req 3.1, 4.6)
+        if should_enter_fix_loop(report.overall_severity):
+            # Enter fix loop instead of completing
+            enter_fix_loop(state, task_id, report.findings)
+        elif auto_complete:
+            # Only mark as completed if no critical/major issues
             update_task_to_completed(state, task_id)
     
     # Save state
@@ -285,16 +292,17 @@ def consolidate_single_task(
     Consolidate reviews for a single task (in-memory operation).
     
     This is the core consolidation function used by other components.
+    If critical/major issues are found, enters fix loop instead of completing.
     
     Args:
         state: AGENT_STATE.json data (will be modified in place)
         task_id: Task ID to consolidate
-        auto_complete: If True, mark task as completed
+        auto_complete: If True, mark task as completed (unless fix loop needed)
     
     Returns:
         FinalReport if created, None if no findings
     
-    Requirement 8.9
+    Requirements: 8.9, 3.1, 4.6
     """
     # Skip if already has final report
     if has_existing_final_report(state, task_id):
@@ -309,8 +317,12 @@ def consolidate_single_task(
     # Add final report
     add_final_report(state, report)
     
-    # Optionally mark task as completed
-    if auto_complete:
+    # Check if fix loop is needed (Req 3.1, 4.6)
+    if should_enter_fix_loop(report.overall_severity):
+        # Enter fix loop instead of completing
+        enter_fix_loop(state, task_id, report.findings)
+    elif auto_complete:
+        # Only mark as completed if no critical/major issues
         update_task_to_completed(state, task_id)
     
     return report

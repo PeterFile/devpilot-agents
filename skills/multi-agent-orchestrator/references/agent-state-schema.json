@@ -72,6 +72,7 @@
             "in_progress",
             "pending_review",
             "under_review",
+            "fix_required",
             "final_review",
             "completed",
             "blocked"
@@ -79,7 +80,7 @@
         },
         "owner_agent": {
           "type": "string",
-          "enum": ["kiro-cli", "gemini", "codex-review"]
+          "enum": ["kiro-cli", "gemini", "codex-review", "codex"]
         },
         "dependencies": {
           "type": "array",
@@ -90,6 +91,72 @@
           "enum": ["standard", "complex", "security-sensitive"]
         },
         "is_optional": { "type": "boolean" },
+        "parent_id": { 
+          "type": ["string", "null"],
+          "description": "Parent task ID if this is a subtask"
+        },
+        "subtasks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of subtask IDs"
+        },
+        "details": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Task detail lines from tasks.md"
+        },
+        "writes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files this task will write to (file manifest)"
+        },
+        "reads": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files this task will read from (file manifest)"
+        },
+        "fix_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Number of completed fix attempts"
+        },
+        "max_fix_attempts": {
+          "type": "integer",
+          "default": 3,
+          "description": "Maximum allowed fix attempts"
+        },
+        "escalated": {
+          "type": "boolean",
+          "description": "Whether task has been escalated to a different agent"
+        },
+        "escalated_at": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Timestamp when task was escalated"
+        },
+        "original_agent": {
+          "type": ["string", "null"],
+          "description": "Original owner agent before escalation"
+        },
+        "last_review_severity": {
+          "type": ["string", "null"],
+          "enum": ["critical", "major", "minor", "none", null],
+          "description": "Severity from the most recent review"
+        },
+        "review_history": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ReviewHistoryEntry" },
+          "description": "History of review attempts for fix loop"
+        },
+        "blocked_reason": {
+          "type": ["string", "null"],
+          "description": "Reason why task is blocked"
+        },
+        "blocked_by": {
+          "type": ["string", "null"],
+          "description": "Task ID that is blocking this task"
+        },
         "exit_code": { "type": "integer" },
         "output": { "type": "string" },
         "error": { "type": "string" },
@@ -138,12 +205,57 @@
     },
     "BlockedItem": {
       "type": "object",
-      "required": ["task_id", "blocking_reason", "required_resolution", "created_at"],
+      "required": ["task_id", "blocking_reason", "created_at"],
       "properties": {
         "task_id": { "type": "string" },
         "blocking_reason": { "type": "string" },
+        "dependent_tasks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of task IDs blocked by this item"
+        },
         "required_resolution": { "type": "string" },
         "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ReviewHistoryEntry": {
+      "type": "object",
+      "required": ["attempt", "severity", "findings", "reviewed_at"],
+      "description": "Entry in the review history for fix loop tracking",
+      "properties": {
+        "attempt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Attempt number (0 = initial review, 1-3 = fix attempts)"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "major", "minor", "none"],
+          "description": "Overall severity of this review"
+        },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ReviewFindingDetail" },
+          "description": "List of findings from this review"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when review was completed"
+        }
+      }
+    },
+    "ReviewFindingDetail": {
+      "type": "object",
+      "required": ["severity", "summary"],
+      "description": "Individual finding from a review",
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "major", "minor", "none"]
+        },
+        "summary": { "type": "string" },
+        "details": { "type": "string" }
       }
     },
     "PendingDecision": {
@@ -152,6 +264,11 @@
       "properties": {
         "id": { "type": "string" },
         "task_id": { "type": "string" },
+        "priority": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "description": "Priority level of the decision"
+        },
         "context": { "type": "string" },
         "options": {
           "type": "array",
