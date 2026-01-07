@@ -1,0 +1,122 @@
+{
+  "tasks": [
+    {
+      "task_id": "task-001",
+      "status": "completed",
+      "owner_agent": "coding-agent-1",
+      "dependencies": [],
+      "output": "Implemented user authentication module with JWT support",
+      "review_phase": "completed",
+      "criticality": "security-sensitive"
+    },
+    {
+      "task_id": "task-002",
+      "status": "under_review",
+      "owner_agent": "coding-agent-2",
+      "dependencies": ["task-001"],
+      "output": "Added password reset functionality",
+      "review_phase": "under_review",
+      "criticality": "standard"
+    },
+    {
+      "task_id": "task-003",
+      "status": "in-progress",
+      "owner_agent": "coding-agent-1",
+      "dependencies": ["task-001"],
+      "output": "",
+      "review_phase": "pending_review",
+      "criticality": "complex"
+    }
+  ],
+  "review_findings": [
+    {
+      "finding_id": "finding-001",
+      "task_id": "task-001",
+      "reviewer_agent": "review-agent-1",
+      "issues_found": [
+        {
+          "issue_id": "issue-001",
+          "description": "JWT token expiration not configurable",
+          "severity": "minor"
+        }
+      ],
+      "severity": "minor"
+    },
+    {
+      "finding_id": "finding-002",
+      "task_id": "task-001",
+      "reviewer_agent": "review-agent-2",
+      "issues_found": [
+        {
+          "issue_id": "issue-002",
+          "description": "Missing rate limiting on login endpoint",
+          "severity": "major"
+        }
+      ],
+      "severity": "major"
+    },
+    {
+      "finding_id": "finding-003",
+      "task_id": "task-002",
+      "reviewer_agent": "review-agent-1",
+      "issues_found": [],
+      "severity": "none"
+    }
+  ],
+  "final_reports": [
+    {
+      "report_id": "report-001",
+      "task_id": "task-001",
+      "findings_summary": "Two issues found: one minor (JWT config) and one major (rate limiting). Both addressed.",
+      "fix_decisions": [
+        {
+          "issue_id": "issue-001",
+          "status": "fixed_immediately",
+          "details": "Added JWT_EXPIRATION_SECONDS environment variable"
+        },
+        {
+          "issue_id": "issue-002",
+          "status": "fixed_immediately",
+          "details": "Implemented rate limiting middleware with 5 attempts per minute"
+        }
+      ],
+      "conclusion": "All issues resolved. Authentication module ready for production."
+    }
+  ],
+  "blocked_items": [
+    {
+      "item_id": "block-001",
+      "blocking_reason": "Waiting for third-party API credentials",
+      "required_resolution": "DevOps team needs to provision OAuth credentials for external provider",
+      "blocked_since": "2025-01-03T10:30:00Z"
+    }
+  ],
+  "pending_decisions": [
+    {
+      "decision_id": "decision-001",
+      "context": "Need to choose between session-based auth and stateless JWT for the admin panel",
+      "options": [
+        {
+          "option_id": "opt-1",
+          "description": "Use session-based authentication",
+          "trade_offs": "Simpler implementation, but requires session storage infrastructure"
+        },
+        {
+          "option_id": "opt-2",
+          "description": "Use stateless JWT tokens",
+          "trade_offs": "No server-side storage needed, but harder to revoke tokens"
+        }
+      ],
+      "requesting_agent": "coding-agent-1",
+      "created_at": "2025-01-04T09:00:00Z"
+    }
+  ],
+  "deferred_fixes": [
+    {
+      "fix_id": "defer-001",
+      "description": "Refactor authentication middleware to support multiple providers",
+      "reason_deferred": "Current single-provider implementation works; multi-provider support planned for v2",
+      "target_task": "task-005"
+    }
+  ]
+}

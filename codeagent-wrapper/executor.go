@@ -324,6 +324,13 @@ func executeConcurrent(layers [][]TaskSpec, timeout int) []TaskResult {
 }
 
 func executeConcurrentWithContext(parentCtx context.Context, layers [][]TaskSpec, timeout int, maxWorkers int) []TaskResult {
+	return executeConcurrentWithContextAndRunner(parentCtx, layers, timeout, maxWorkers, runCodexTaskFn)
+}
+
+func executeConcurrentWithContextAndRunner(parentCtx context.Context, layers [][]TaskSpec, timeout int, maxWorkers int, runFn func(TaskSpec, int) TaskResult) []TaskResult {
+	if runFn == nil {
+		runFn = runCodexTaskFn
+	}
 	totalTasks := 0
 	for _, layer := range layers {
 		totalTasks += len(layer)
@@ -454,7 +461,7 @@ func executeConcurrentWithContext(parentCtx context.Context, layers [][]TaskSpec
 
 				printTaskStart(ts.ID, taskLogPath, handle.shared)
 
-				res := runCodexTaskFn(ts, timeout)
+				res := runFn(ts, timeout)
 				if taskLogPath != "" {
 					if res.LogPath == "" || (handle.shared && handle.logger != nil && res.LogPath == handle.logger.Path()) {
 						res.LogPath = taskLogPath

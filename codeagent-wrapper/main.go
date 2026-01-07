@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -179,6 +180,11 @@ func run() (exitCode int) {
 		if parallelIndex != -1 {
 			backendName := defaultBackendName
 			fullOutput := false
+			tmuxSession := ""
+			tmuxAttach := false
+			windowFor := ""
+			stateFile := ""
+			isReview := false
 			var extras []string
 
 			for i := 0; i < len(args); i++ {
@@ -202,18 +208,72 @@ func run() (exitCode int) {
 						return 1
 					}
 					backendName = value
+				case arg == "--tmux-session":
+					if i+1 >= len(args) {
+						fmt.Fprintln(os.Stderr, "ERROR: --tmux-session flag requires a value")
+						return 1
+					}
+					tmuxSession = args[i+1]
+					i++
+				case strings.HasPrefix(arg, "--tmux-session="):
+					value := strings.TrimPrefix(arg, "--tmux-session=")
+					if value == "" {
+						fmt.Fprintln(os.Stderr, "ERROR: --tmux-session flag requires a value")
+						return 1
+					}
+					tmuxSession = value
+				case arg == "--tmux-attach":
+					tmuxAttach = true
+				case strings.HasPrefix(arg, "--tmux-attach="):
+					tmuxAttach = parseBoolFlag(strings.TrimPrefix(arg, "--tmux-attach="), tmuxAttach)
+				case arg == "--window-for":
+					if i+1 >= len(args) {
+						fmt.Fprintln(os.Stderr, "ERROR: --window-for flag requires a value")
+						return 1
+					}
+					windowFor = args[i+1]
+					i++
+				case strings.HasPrefix(arg, "--window-for="):
+					value := strings.TrimPrefix(arg, "--window-for=")
+					if value == "" {
+						fmt.Fprintln(os.Stderr, "ERROR: --window-for flag requires a value")
+						return 1
+					}
+					windowFor = value
+				case arg == "--state-file":
+					if i+1 >= len(args) {
+						fmt.Fprintln(os.Stderr, "ERROR: --state-file flag requires a value")
+						return 1
+					}
+					stateFile = args[i+1]
+					i++
+				case strings.HasPrefix(arg, "--state-file="):
+					value := strings.TrimPrefix(arg, "--state-file=")
+					if value == "" {
+						fmt.Fprintln(os.Stderr, "ERROR: --state-file flag requires a value")
+						return 1
+					}
+					stateFile = value
+				case arg == "--review":
+					isReview = true
+				case strings.HasPrefix(arg, "--review="):
+					isReview = parseBoolFlag(strings.TrimPrefix(arg, "--review="), isReview)
 				default:
 					extras = append(extras, arg)
 				}
 			}
 
 			if len(extras) > 0 {
-				fmt.Fprintln(os.Stderr, "ERROR: --parallel reads its task configuration from stdin; only --backend and --full-output are allowed.")
+				fmt.Fprintln(os.Stderr, "ERROR: --parallel reads its task configuration from stdin; only --backend, --full-output, and tmux/state flags are allowed.")
 				fmt.Fprintln(os.Stderr, "Usage examples:")
 				fmt.Fprintf(os.Stderr, "  %s --parallel < tasks.txt\n", name)
 				fmt.Fprintf(os.Stderr, "  echo '...' | %s --parallel\n", name)
 				fmt.Fprintf(os.Stderr, "  %s --parallel <<'EOF'\n", name)
 				fmt.Fprintf(os.Stderr, "  %s --parallel --full-output <<'EOF'  # include full task output\n", name)
+				return 1
+			}
+			if windowFor != "" {
+				fmt.Fprintln(os.Stderr, "ERROR: --window-for is only supported in single-task mode")
 				return 1
 			}
 
@@ -250,7 +310,26 @@ func run() (exitCode int) {
 				return 1
 			}
 
-			results := executeConcurrent(layers, timeoutSec)
+			var results []TaskResult
+			if tmuxSession != "" {
+				tmuxMgr := NewTmuxManager(TmuxConfig{
+					SessionName: tmuxSession,
+					MainWindow:  "main",
+					StateFile:   stateFile,
+				})
+				if err := tmuxMgr.EnsureSession(); err != nil {
+					fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+					return 1
+				}
+				var stateWriter *StateWriter
+				if strings.TrimSpace(stateFile) != "" {
+					stateWriter = NewStateWriter(stateFile)
+				}
+				runner := newTmuxTaskRunner(tmuxMgr, stateWriter, isReview, "")
+				results = executeConcurrentWithContextAndRunner(context.Background(), layers, timeoutSec, resolveMaxParallelWorkers(), runner.run)
+			} else {
+				results = executeConcurrent(layers, timeoutSec)
+			}
 
 			// Extract structured report fields from each result
 			for i := range results {
@@ -275,15 +354,23 @@ func run() (exitCode int) {
 				results[i].KeyOutput = extractKeyOutputFromLines(lines, 150)
 			}
 
-			// Default: summary mode (context-efficient)
-			// --full-output: legacy full output mode
-			fmt.Println(generateFinalOutputWithMode(results, !fullOutput))
+			report := buildExecutionReport(results, fullOutput)
+			payload, err := jsonMarshal(report)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "ERROR: failed to serialize execution report: %v\n", err)
+				return 1
+			}
+			fmt.Println(string(payload))
 
 			exitCode = 0
 			for _, res := range results {
 				if res.ExitCode != 0 {
 					exitCode = res.ExitCode
 				}
+			}
+
+			if tmuxAttach && tmuxSession != "" {
+				_ = attachTmuxSession(tmuxSession)
 			}
 
 			return exitCode
@@ -359,6 +446,11 @@ func run() (exitCode int) {
 	if useStdin {
 		targetArg = "-"
 	}
+
+	if strings.TrimSpace(cfg.TmuxSession) != "" {
+		return runTmuxMode(cfg, taskText, useStdin)
+	}
+
 	codexArgs := buildCodexArgsFn(cfg, targetArg)
 
 	// Print startup information to stderr
@@ -479,8 +571,10 @@ Usage:
     %[1]s - [workdir]              Read task from stdin
     %[1]s resume <session_id> "task" [workdir]
     %[1]s resume <session_id> - [workdir]
+    %[1]s --tmux-session <name> "task" [workdir]
+    %[1]s --tmux-session <name> --window-for <task_id> "task" [workdir]
     %[1]s --parallel               Run tasks in parallel (config from stdin)
-    %[1]s --parallel --full-output Run tasks in parallel with full output (legacy)
+    %[1]s --parallel --full-output Run tasks in parallel with full output in JSON report
     %[1]s --version
     %[1]s --help
 
@@ -493,6 +587,13 @@ Parallel mode examples:
 Environment Variables:
     CODEX_TIMEOUT         Timeout in milliseconds (default: 7200000)
     CODEAGENT_ASCII_MODE  Use ASCII symbols instead of Unicode (PASS/WARN/FAIL)
+
+Tmux Flags:
+    --tmux-session <name>  Enable tmux visualization mode
+    --tmux-attach          Attach to tmux session after completion
+    --window-for <task_id> Create pane in existing task window (single-task mode)
+    --state-file <path>    Write AGENT_STATE.json updates
+    --review               Mark tasks as review tasks for state updates
 
 Exit Codes:
     0    Success

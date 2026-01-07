@@ -1,0 +1,288 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agent-state-schema.json",
+  "title": "Agent State",
+  "description": "Structured coordination state for multi-agent collaboration",
+  "type": "object",
+  "required": ["tasks", "review_findings", "final_reports", "blocked_items", "pending_decisions", "deferred_fixes"],
+  "properties": {
+    "tasks": {
+      "type": "array",
+      "description": "List of tasks being tracked",
+      "items": {
+        "$ref": "#/definitions/Task"
+      }
+    },
+    "review_findings": {
+      "type": "array",
+      "description": "Review findings from Review Agents",
+      "items": {
+        "$ref": "#/definitions/ReviewFinding"
+      }
+    },
+    "final_reports": {
+      "type": "array",
+      "description": "Final reports from Final Review Agent",
+      "items": {
+        "$ref": "#/definitions/FinalReport"
+      }
+    },
+    "blocked_items": {
+      "type": "array",
+      "description": "Items that are blocked and need resolution",
+      "items": {
+        "$ref": "#/definitions/BlockedItem"
+      }
+    },
+    "pending_decisions": {
+      "type": "array",
+      "description": "Decisions pending human input",
+      "items": {
+        "$ref": "#/definitions/PendingDecision"
+      }
+    },
+    "deferred_fixes": {
+      "type": "array",
+      "description": "Fixes that have been deferred for later",
+      "items": {
+        "$ref": "#/definitions/DeferredFix"
+      }
+    }
+  },
+  "definitions": {
+    "Task": {
+      "type": "object",
+      "required": ["task_id", "status", "owner_agent", "dependencies", "output", "review_phase", "criticality"],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "Unique identifier for the task"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["in-progress", "pending_review", "under_review", "final_review", "completed", "blocked"],
+          "description": "Current status of the task"
+        },
+        "owner_agent": {
+          "type": "string",
+          "description": "Agent responsible for this task"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of task_ids this task depends on"
+        },
+        "output": {
+          "type": "string",
+          "description": "Output or result of the task"
+        },
+        "review_phase": {
+          "$ref": "#/definitions/ReviewPhase"
+        },
+        "criticality": {
+          "$ref": "#/definitions/Criticality"
+        }
+      }
+    },
+    "ReviewFinding": {
+      "type": "object",
+      "required": ["finding_id", "task_id", "reviewer_agent", "issues_found", "severity"],
+      "properties": {
+        "finding_id": {
+          "type": "string",
+          "description": "Unique identifier for the finding"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task this finding relates to"
+        },
+        "reviewer_agent": {
+          "type": "string",
+          "description": "Agent that produced this finding"
+        },
+        "issues_found": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Issue"
+          },
+          "description": "List of issues found during review"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "major", "minor", "none"],
+          "description": "Overall severity of the finding"
+        }
+      }
+    },
+    "Issue": {
+      "type": "object",
+      "required": ["issue_id", "description", "severity"],
+      "properties": {
+        "issue_id": {
+          "type": "string",
+          "description": "Unique identifier for the issue"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the issue"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "major", "minor", "none"],
+          "description": "Severity of this specific issue"
+        }
+      }
+    },
+    "FinalReport": {
+      "type": "object",
+      "required": ["report_id", "task_id", "findings_summary", "fix_decisions", "conclusion"],
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "description": "Unique identifier for the report"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task this report relates to"
+        },
+        "findings_summary": {
+          "type": "string",
+          "description": "Summary of all findings"
+        },
+        "fix_decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FixDecision"
+          },
+          "description": "Decisions made about each issue"
+        },
+        "conclusion": {
+          "type": "string",
+          "description": "Final conclusion of the review"
+        }
+      }
+    },
+    "FixDecision": {
+      "type": "object",
+      "required": ["issue_id", "status", "details"],
+      "properties": {
+        "issue_id": {
+          "type": "string",
+          "description": "Issue this decision relates to"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["fixed_immediately", "deferred", "superseded"],
+          "description": "Status of the fix decision"
+        },
+        "details": {
+          "type": "string",
+          "description": "Details about the fix decision"
+        }
+      }
+    },
+    "BlockedItem": {
+      "type": "object",
+      "required": ["item_id", "blocking_reason", "required_resolution", "blocked_since"],
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "description": "Unique identifier for the blocked item"
+        },
+        "blocking_reason": {
+          "type": "string",
+          "description": "Reason why this item is blocked"
+        },
+        "required_resolution": {
+          "type": "string",
+          "description": "What is needed to unblock"
+        },
+        "blocked_since": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when blocking started"
+        }
+      }
+    },
+    "PendingDecision": {
+      "type": "object",
+      "required": ["decision_id", "context", "options", "requesting_agent", "created_at"],
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "description": "Unique identifier for the decision"
+        },
+        "context": {
+          "type": "string",
+          "description": "Context for the decision"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DecisionOption"
+          },
+          "description": "Available options for the decision"
+        },
+        "requesting_agent": {
+          "type": "string",
+          "description": "Agent requesting the decision"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when decision was requested"
+        }
+      }
+    },
+    "DecisionOption": {
+      "type": "object",
+      "required": ["option_id", "description", "trade_offs"],
+      "properties": {
+        "option_id": {
+          "type": "string",
+          "description": "Unique identifier for the option"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the option"
+        },
+        "trade_offs": {
+          "type": "string",
+          "description": "Trade-offs of choosing this option"
+        }
+      }
+    },
+    "DeferredFix": {
+      "type": "object",
+      "required": ["fix_id", "description", "reason_deferred", "target_task"],
+      "properties": {
+        "fix_id": {
+          "type": "string",
+          "description": "Unique identifier for the deferred fix"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the fix"
+        },
+        "reason_deferred": {
+          "type": "string",
+          "description": "Reason why the fix was deferred"
+        },
+        "target_task": {
+          "type": "string",
+          "description": "Task where this fix should be applied"
+        }
+      }
+    },
+    "ReviewPhase": {
+      "type": "string",
+      "enum": ["pending_review", "under_review", "final_review", "completed", "blocked"],
+      "description": "Current phase in the review process"
+    },
+    "Criticality": {
+      "type": "string",
+      "enum": ["standard", "complex", "security-sensitive"],
+      "description": "Criticality level of the task"
+    }
+  }
+}

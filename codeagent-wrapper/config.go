@@ -20,6 +20,11 @@ type Config struct {
 	Backend            string
 	SkipPermissions    bool
 	MaxParallelWorkers int
+	TmuxSession        string
+	TmuxAttach         bool
+	WindowFor          string
+	StateFile          string
+	IsReview           bool
 }
 
 // ParallelConfig defines the JSON schema for parallel execution
@@ -61,9 +66,10 @@ type TaskResult struct {
 }
 
 var backendRegistry = map[string]Backend{
-	"codex":  CodexBackend{},
-	"claude": ClaudeBackend{},
-	"gemini": GeminiBackend{},
+	"codex":    CodexBackend{},
+	"claude":   ClaudeBackend{},
+	"gemini":   GeminiBackend{},
+	"kiro-cli": KiroCliBackend{},
 }
 
 func selectBackend(name string) (Backend, error) {
@@ -199,6 +205,11 @@ func parseArgs() (*Config, error) {
 
 	backendName := defaultBackendName
 	skipPermissions := envFlagEnabled("CODEAGENT_SKIP_PERMISSIONS")
+	tmuxSession := ""
+	tmuxAttach := false
+	windowFor := ""
+	stateFile := ""
+	isReview := false
 	filtered := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -226,6 +237,60 @@ func parseArgs() (*Config, error) {
 		case strings.HasPrefix(arg, "--dangerously-skip-permissions="):
 			skipPermissions = parseBoolFlag(strings.TrimPrefix(arg, "--dangerously-skip-permissions="), skipPermissions)
 			continue
+		case arg == "--tmux-session":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--tmux-session flag requires a value")
+			}
+			tmuxSession = args[i+1]
+			i++
+			continue
+		case strings.HasPrefix(arg, "--tmux-session="):
+			value := strings.TrimPrefix(arg, "--tmux-session=")
+			if value == "" {
+				return nil, fmt.Errorf("--tmux-session flag requires a value")
+			}
+			tmuxSession = value
+			continue
+		case arg == "--tmux-attach":
+			tmuxAttach = true
+			continue
+		case strings.HasPrefix(arg, "--tmux-attach="):
+			tmuxAttach = parseBoolFlag(strings.TrimPrefix(arg, "--tmux-attach="), tmuxAttach)
+			continue
+		case arg == "--window-for":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--window-for flag requires a value")
+			}
+			windowFor = args[i+1]
+			i++
+			continue
+		case strings.HasPrefix(arg, "--window-for="):
+			value := strings.TrimPrefix(arg, "--window-for=")
+			if value == "" {
+				return nil, fmt.Errorf("--window-for flag requires a value")
+			}
+			windowFor = value
+			continue
+		case arg == "--state-file":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--state-file flag requires a value")
+			}
+			stateFile = args[i+1]
+			i++
+			continue
+		case strings.HasPrefix(arg, "--state-file="):
+			value := strings.TrimPrefix(arg, "--state-file=")
+			if value == "" {
+				return nil, fmt.Errorf("--state-file flag requires a value")
+			}
+			stateFile = value
+			continue
+		case arg == "--review":
+			isReview = true
+			continue
+		case strings.HasPrefix(arg, "--review="):
+			isReview = parseBoolFlag(strings.TrimPrefix(arg, "--review="), isReview)
+			continue
 		}
 		filtered = append(filtered, arg)
 	}
@@ -235,7 +300,16 @@ func parseArgs() (*Config, error) {
 	}
 	args = filtered
 
-	cfg := &Config{WorkDir: defaultWorkdir, Backend: backendName, SkipPermissions: skipPermissions}
+	cfg := &Config{
+		WorkDir:         defaultWorkdir,
+		Backend:         backendName,
+		SkipPermissions: skipPermissions,
+		TmuxSession:     tmuxSession,
+		TmuxAttach:      tmuxAttach,
+		WindowFor:       windowFor,
+		StateFile:       stateFile,
+		IsReview:        isReview,
+	}
 	cfg.MaxParallelWorkers = resolveMaxParallelWorkers()
 
 	if args[0] == "resume" {
