@@ -79,68 +79,68 @@ Implementation uses Python for orchestration scripts (consistent with existing c
 - [ ] 4. Checkpoint - Ensure file conflict detection tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Implement Fix Loop Workflow
-  - [ ] 5.1 Extend TaskStatus enum with fix_required
+- [x] 5. Implement Fix Loop Workflow
+  - [x] 5.1 Extend TaskStatus enum with fix_required
     - Add `FIX_REQUIRED = "fix_required"` to TaskStatus enum
     - Update `VALID_TRANSITIONS` to include fix_required transitions
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-  - [ ] 5.2 Write property test for fix loop state transitions
+  - [x] 5.2 Write property test for fix loop state transitions
     - **Property 8: Fix Loop State Transitions**
     - **Validates: Requirements 4.2, 4.3, 4.4, 4.5, 4.6**
 
-  - [ ] 5.3 Extend Task dataclass with fix loop fields
+  - [x] 5.3 Extend Task dataclass with fix loop fields
     - Add `fix_attempts`, `escalated`, `escalated_at`, `original_agent` fields
     - Add `last_review_severity`, `review_history` fields
     - Add `blocked_reason`, `blocked_by` fields
     - _Requirements: 3.10_
 
-  - [ ] 5.4 Implement fix loop entry and blocking
+  - [x] 5.4 Implement fix loop entry and blocking
     - Create `fix_loop.py` module
     - Add `enter_fix_loop()` function
     - Add `get_all_dependent_task_ids()` with transitive closure
     - Add `block_dependent_tasks()` function
     - _Requirements: 3.1, 3.2_
 
-  - [ ] 5.5 Write property test for fix loop entry
+  - [x] 5.5 Write property test for fix loop entry
     - **Property 6: Fix Loop Entry**
     - **Validates: Requirements 3.1, 3.2**
 
-  - [ ] 5.6 Implement fix loop action evaluation
+  - [x] 5.6 Implement fix loop action evaluation
     - Add `FixLoopAction` enum
     - Add `evaluate_fix_loop_action()` function
     - Implement escalation threshold (2 completed attempts)
     - Implement human fallback threshold (3 completed attempts)
     - _Requirements: 3.3, 3.6, 3.7_
 
-  - [ ] 5.7 Write property test for fix loop retry budget
+  - [x] 5.7 Write property test for fix loop retry budget
     - **Property 7: Fix Loop Retry Budget**
     - **Validates: Requirements 3.3, 3.6, 3.7, 3.8, 3.9**
 
-  - [ ] 5.8 Implement fix request creation and prompt building
+  - [x] 5.8 Implement fix request creation and prompt building
     - Add `FixRequest` dataclass
     - Add `create_fix_request()` function
     - Add `build_fix_prompt()` function with history for escalation
     - Add `format_review_history()` function
     - _Requirements: 3.4, 6.1, 6.2, 6.3, 6.4, 6.5_
 
-  - [ ] 5.9 Write property test for fix prompt content
+  - [x] 5.9 Write property test for fix prompt content
     - **Property 9: Fix Prompt Content**
     - **Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5**
 
-  - [ ] 5.10 Implement fix loop scheduling
+  - [x] 5.10 Implement fix loop scheduling
     - Add `get_fix_required_tasks()` function
     - Add `process_fix_loop()` function
     - Add `on_fix_task_complete()` function
     - Add `on_review_complete()` function
     - _Requirements: 4.6, 3.5_
 
-  - [ ] 5.11 Implement unblock and success handling
+  - [x] 5.11 Implement unblock and success handling
     - Add `unblock_dependent_tasks()` function
     - Add `handle_fix_loop_success()` function
     - _Requirements: 3.9_
 
-  - [ ] 5.12 Implement human fallback
+  - [x] 5.12 Implement human fallback
     - Add `trigger_human_fallback()` function
     - Create pending_decision entry with context
     - Block dependent tasks

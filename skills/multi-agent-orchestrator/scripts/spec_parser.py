@@ -27,13 +27,51 @@ class TaskStatus(Enum):
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     PENDING_REVIEW = "pending_review"
+    UNDER_REVIEW = "under_review"
+    FIX_REQUIRED = "fix_required"  # NEW: Task needs fixes after review
+    FINAL_REVIEW = "final_review"
     COMPLETED = "completed"
     BLOCKED = "blocked"
 
 
+# Valid state transitions for task status
+# Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+VALID_TRANSITIONS = {
+    "not_started": ["in_progress", "blocked"],
+    "in_progress": ["pending_review", "blocked"],
+    "pending_review": ["under_review", "blocked"],
+    "under_review": ["final_review", "fix_required", "blocked"],  # NEW: fix_required
+    "fix_required": ["in_progress", "blocked"],  # NEW: can retry or block
+    "final_review": ["completed", "blocked"],
+    "completed": [],
+    "blocked": ["not_started", "in_progress", "fix_required"],  # NEW: can go to fix_required
+}
+
+
+def validate_transition(from_status: str, to_status: str) -> bool:
+    """
+    Validate state transition.
+    
+    Requirements: 4.5
+    
+    Args:
+        from_status: Current status
+        to_status: Target status
+        
+    Returns:
+        True if transition is valid, False otherwise
+    """
+    valid_targets = VALID_TRANSITIONS.get(from_status, [])
+    return to_status in valid_targets
+
+
 @dataclass
 class Task:
-    """Represents a parsed task from tasks.md"""
+    """
+    Represents a parsed task from tasks.md
+    
+    Extended with fix loop fields for Requirements 3.10
+    """
     task_id: str
     description: str
     task_type: TaskType = TaskType.CODE
@@ -46,6 +84,17 @@ class Task:
     # File manifest fields for conflict detection (Requirement 2.1)
     writes: List[str] = field(default_factory=list)
     reads: List[str] = field(default_factory=list)
+    
+    # Fix loop fields (Requirement 3.10)
+    fix_attempts: int = 0
+    max_fix_attempts: int = 3
+    escalated: bool = False
+    escalated_at: Optional[str] = None
+    original_agent: Optional[str] = None
+    last_review_severity: Optional[str] = None
+    review_history: List[Dict] = field(default_factory=list)
+    blocked_reason: Optional[str] = None
+    blocked_by: Optional[str] = None
     
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization"""
@@ -61,6 +110,16 @@ class Task:
             "details": self.details,
             "writes": self.writes,
             "reads": self.reads,
+            # Fix loop fields
+            "fix_attempts": self.fix_attempts,
+            "max_fix_attempts": self.max_fix_attempts,
+            "escalated": self.escalated,
+            "escalated_at": self.escalated_at,
+            "original_agent": self.original_agent,
+            "last_review_severity": self.last_review_severity,
+            "review_history": self.review_history,
+            "blocked_reason": self.blocked_reason,
+            "blocked_by": self.blocked_by,
         }
 
 

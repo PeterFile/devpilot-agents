@@ -847,3 +847,189 @@ def test_property_4_file_manifest_multiple_markers_combined(data):
     
     assert set(writes) == expected_writes, \
         f"Expected writes {expected_writes}, got {set(writes)}"
+
+
+# ============================================================================
+# Property Tests for Fix Loop State Transitions
+# Feature: orchestration-fixes
+# Property 8: Fix Loop State Transitions
+# Validates: Requirements 4.2, 4.3, 4.4, 4.5, 4.6
+# ============================================================================
+
+from spec_parser import TaskStatus, VALID_TRANSITIONS, validate_transition
+
+
+@st.composite
+def status_strategy(draw):
+    """Generate valid task statuses."""
+    return draw(st.sampled_from(list(VALID_TRANSITIONS.keys())))
+
+
+@st.composite
+def valid_transition_strategy(draw):
+    """Generate a valid state transition."""
+    from_status = draw(status_strategy())
+    valid_targets = VALID_TRANSITIONS.get(from_status, [])
+    
+    if not valid_targets:
+        # No valid transitions from this state, try another
+        from_status = draw(st.sampled_from([s for s in VALID_TRANSITIONS.keys() if VALID_TRANSITIONS[s]]))
+        valid_targets = VALID_TRANSITIONS[from_status]
+    
+    to_status = draw(st.sampled_from(valid_targets))
+    return {"from": from_status, "to": to_status}
+
+
+@st.composite
+def invalid_transition_strategy(draw):
+    """Generate an invalid state transition."""
+    from_status = draw(status_strategy())
+    valid_targets = set(VALID_TRANSITIONS.get(from_status, []))
+    all_statuses = set(VALID_TRANSITIONS.keys())
+    
+    # Invalid targets are all statuses except valid ones
+    invalid_targets = all_statuses - valid_targets - {from_status}
+    
+    if not invalid_targets:
+        # All transitions are valid from this state, try another
+        for s in VALID_TRANSITIONS.keys():
+            valid = set(VALID_TRANSITIONS.get(s, []))
+            invalid = all_statuses - valid - {s}
+            if invalid:
+                from_status = s
+                invalid_targets = invalid
+                break
+    
+    if not invalid_targets:
+        return None  # No invalid transitions possible
+    
+    to_status = draw(st.sampled_from(list(invalid_targets)))
+    return {"from": from_status, "to": to_status}
+
+
+@given(transition=valid_transition_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_8_valid_transitions_accepted(transition):
+    """
+    Property 8: Fix Loop State Transitions - Valid transitions accepted
+    
+    For any valid state transition defined in VALID_TRANSITIONS,
+    validate_transition SHALL return True.
+    
+    Feature: orchestration-fixes, Property 8
+    Validates: Requirements 4.2, 4.3, 4.4, 4.5
+    """
+    result = validate_transition(transition["from"], transition["to"])
+    assert result is True, \
+        f"Valid transition {transition['from']} -> {transition['to']} should be accepted"
+
+
+@given(transition=invalid_transition_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_8_invalid_transitions_rejected(transition):
+    """
+    Property 8: Fix Loop State Transitions - Invalid transitions rejected
+    
+    For any state transition NOT defined in VALID_TRANSITIONS,
+    validate_transition SHALL return False.
+    
+    Feature: orchestration-fixes, Property 8
+    Validates: Requirements 4.5
+    """
+    if transition is None:
+        return  # Skip if no invalid transition could be generated
+    
+    result = validate_transition(transition["from"], transition["to"])
+    assert result is False, \
+        f"Invalid transition {transition['from']} -> {transition['to']} should be rejected"
+
+
+@settings(max_examples=1, deadline=None)
+@given(st.just(None))
+def test_property_8_fix_required_transitions_specific(_):
+    """
+    Property 8: Fix Loop State Transitions - Specific fix_required transitions
+    
+    The following specific transitions involving fix_required SHALL be valid:
+    - under_review -> fix_required (when review finds critical/major)
+    - fix_required -> in_progress (when fix is dispatched)
+    - fix_required -> blocked (when max retries exceeded)
+    - blocked -> fix_required (when blocker resolved and fix needed)
+    
+    Feature: orchestration-fixes, Property 8
+    Validates: Requirements 4.2, 4.3, 4.4, 4.6
+    """
+    # under_review -> fix_required (Req 4.2)
+    assert validate_transition("under_review", "fix_required"), \
+        "under_review -> fix_required should be valid"
+    
+    # fix_required -> in_progress (Req 4.3)
+    assert validate_transition("fix_required", "in_progress"), \
+        "fix_required -> in_progress should be valid"
+    
+    # fix_required -> blocked (Req 4.4)
+    assert validate_transition("fix_required", "blocked"), \
+        "fix_required -> blocked should be valid"
+    
+    # blocked -> fix_required (Req 4.6)
+    assert validate_transition("blocked", "fix_required"), \
+        "blocked -> fix_required should be valid"
+
+
+@settings(max_examples=1, deadline=None)
+@given(st.just(None))
+def test_property_8_fix_required_invalid_transitions_specific(_):
+    """
+    Property 8: Fix Loop State Transitions - Invalid fix_required transitions
+    
+    The following transitions involving fix_required SHALL be invalid:
+    - not_started -> fix_required (must go through review first)
+    - fix_required -> completed (must go through review)
+    - fix_required -> pending_review (must go to in_progress first)
+    - completed -> fix_required (completed is terminal)
+    
+    Feature: orchestration-fixes, Property 8
+    Validates: Requirements 4.5
+    """
+    # not_started -> fix_required (invalid)
+    assert not validate_transition("not_started", "fix_required"), \
+        "not_started -> fix_required should be invalid"
+    
+    # fix_required -> completed (invalid - must go through review)
+    assert not validate_transition("fix_required", "completed"), \
+        "fix_required -> completed should be invalid"
+    
+    # fix_required -> pending_review (invalid - must go to in_progress first)
+    assert not validate_transition("fix_required", "pending_review"), \
+        "fix_required -> pending_review should be invalid"
+    
+    # completed -> fix_required (invalid - completed is terminal)
+    assert not validate_transition("completed", "fix_required"), \
+        "completed -> fix_required should be invalid"
+
+
+@given(from_status=status_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_8_completed_is_terminal(from_status):
+    """
+    Property 8: Fix Loop State Transitions - Completed is terminal
+    
+    For any status, transitioning FROM completed SHALL be invalid
+    (completed is a terminal state).
+    
+    Feature: orchestration-fixes, Property 8
+    Validates: Requirements 4.5
+    """
+    # completed has no valid outgoing transitions
+    assert VALID_TRANSITIONS.get("completed", []) == [], \
+        "completed should have no valid outgoing transitions"
+    
+    # Any transition from completed should be invalid
+    if from_status != "completed":
+        # This tests that we can't go TO completed from invalid states
+        pass  # Covered by other tests
+    else:
+        # Test that we can't go FROM completed to anything
+        for to_status in VALID_TRANSITIONS.keys():
+            assert not validate_transition("completed", to_status), \
+                f"completed -> {to_status} should be invalid"
