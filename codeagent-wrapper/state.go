@@ -13,9 +13,42 @@ import (
 )
 
 // TaskResultState represents a task result in AGENT_STATE.json.
+// This struct contains ALL task fields to support both:
+// - Orchestration fields (set by Python scripts): owner_agent, dependencies, subtasks, etc.
+// - Execution fields (set by Go wrapper): exit_code, output, error, etc.
+//
+// When WriteTaskResult() is called, only execution-related fields are updated,
+// preserving existing orchestration fields set by Python scripts.
+// Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
 type TaskResultState struct {
-	TaskID       string    `json:"task_id"`
-	Status       string    `json:"status"`
+	// Core identification
+	TaskID      string `json:"task_id"`
+	Description string `json:"description,omitempty"`
+	Type        string `json:"type,omitempty"` // "code", "ui", "review"
+	Status      string `json:"status"`
+
+	// Orchestration fields (preserved during execution updates)
+	OwnerAgent         string           `json:"owner_agent,omitempty"`
+	Dependencies       []string         `json:"dependencies,omitempty"`
+	Criticality        string           `json:"criticality,omitempty"`
+	IsOptional         bool             `json:"is_optional,omitempty"`
+	ParentID           *string          `json:"parent_id,omitempty"`
+	Subtasks           []string         `json:"subtasks,omitempty"`
+	Details            []string         `json:"details,omitempty"`
+	Writes             []string         `json:"writes,omitempty"`
+	Reads              []string         `json:"reads,omitempty"`
+	FixAttempts        int              `json:"fix_attempts,omitempty"`
+	MaxFixAttempts     int              `json:"max_fix_attempts,omitempty"`
+	Escalated          bool             `json:"escalated,omitempty"`
+	EscalatedAt        *string          `json:"escalated_at,omitempty"`
+	OriginalAgent      *string          `json:"original_agent,omitempty"`
+	LastReviewSeverity *string          `json:"last_review_severity,omitempty"`
+	ReviewHistory      []map[string]any `json:"review_history,omitempty"`
+	BlockedReason      *string          `json:"blocked_reason,omitempty"`
+	BlockedBy          *string          `json:"blocked_by,omitempty"`
+	CreatedAt          string           `json:"created_at,omitempty"`
+
+	// Execution result fields (updated by Go wrapper)
 	ExitCode     int       `json:"exit_code"`
 	Output       string    `json:"output,omitempty"`
 	Error        string    `json:"error,omitempty"`
@@ -111,7 +144,10 @@ func (sw *StateWriter) WriteTaskResult(result TaskResultState) error {
 			return fmt.Errorf("invalid state transition for %s: %s -> %s", result.TaskID, prevStatus, result.Status)
 		}
 		if idx >= 0 {
-			state.Tasks[idx] = result
+			// Merge execution fields into existing task, preserving orchestration fields
+			// Requirements: 9.1, 9.2, 9.3, 9.4
+			existing := &state.Tasks[idx]
+			mergeExecutionFields(existing, &result)
 		} else {
 			state.Tasks = append(state.Tasks, result)
 		}
@@ -123,6 +159,48 @@ func (sw *StateWriter) WriteTaskResult(result TaskResultState) error {
 		}
 		return nil
 	})
+}
+
+// mergeExecutionFields updates only execution-related fields in the existing task,
+// preserving orchestration fields set by Python scripts.
+// Requirements: 9.1, 9.2, 9.3, 9.4
+func mergeExecutionFields(existing *TaskResultState, result *TaskResultState) {
+	// Always update status if provided
+	if result.Status != "" {
+		existing.Status = result.Status
+	}
+
+	// Update execution result fields (these come from Go wrapper execution)
+	if result.ExitCode != 0 || !result.CompletedAt.IsZero() {
+		existing.ExitCode = result.ExitCode
+	}
+	if !result.CompletedAt.IsZero() {
+		existing.CompletedAt = result.CompletedAt
+	}
+
+	// Update optional execution fields even when empty to clear stale results
+	existing.Output = result.Output
+	existing.Error = result.Error
+	existing.FilesChanged = result.FilesChanged
+	existing.Coverage = result.Coverage
+	existing.CoverageNum = result.CoverageNum
+	existing.TestsPassed = result.TestsPassed
+	existing.TestsFailed = result.TestsFailed
+	if result.WindowID != "" {
+		existing.WindowID = result.WindowID
+	}
+	if result.PaneID != "" {
+		existing.PaneID = result.PaneID
+	}
+
+	// Note: Orchestration fields are NOT updated here:
+	// - OwnerAgent, Dependencies, Criticality, IsOptional
+	// - ParentID, Subtasks, Details
+	// - Writes, Reads
+	// - FixAttempts, MaxFixAttempts, Escalated, EscalatedAt, OriginalAgent
+	// - LastReviewSeverity, ReviewHistory
+	// - BlockedReason, BlockedBy, CreatedAt
+	// These are managed by Python orchestration scripts
 }
 
 func (sw *StateWriter) WriteReviewFinding(finding ReviewFindingState) error {
@@ -158,6 +236,36 @@ func (sw *StateWriter) WriteDeferredFix(fix DeferredFixState) error {
 		state.DeferredFixes = append(state.DeferredFixes, fix)
 		return nil
 	})
+}
+
+// GetWindowMapping returns the window mapping from AGENT_STATE.
+// This allows cross-batch dependency resolution by looking up windows
+// from previous batches that were persisted to state.
+// Requirements: 11.1, 11.2, 11.3, 11.4
+func (sw *StateWriter) GetWindowMapping() (map[string]string, error) {
+	if sw == nil {
+		return nil, errors.New("state writer is nil")
+	}
+	if strings.TrimSpace(sw.path) == "" {
+		return nil, errors.New("state file path is required")
+	}
+
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+
+	state, err := sw.readState()
+	if err != nil {
+		return nil, err
+	}
+	if state.WindowMapping == nil {
+		return map[string]string{}, nil
+	}
+	// Return a copy to avoid concurrent modification
+	result := make(map[string]string, len(state.WindowMapping))
+	for k, v := range state.WindowMapping {
+		result[k] = v
+	}
+	return result, nil
 }
 
 func (sw *StateWriter) updateState(updateFn func(state *AgentState) error) error {

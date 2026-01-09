@@ -20,7 +20,13 @@ type ExecutionSummary struct {
 
 // ExecutionReport is the structured output for parallel execution.
 // This report is returned synchronously to the Orchestrator after all tasks complete.
-// Requirements: 9.2, 12.8
+//
+// The report includes both original field names and Python-compatible aliases:
+// - tasks / task_results: Array of task results
+// - summary.passed / tasks_completed: Count of successful tasks
+// - summary.failed / tasks_failed: Count of failed tasks
+//
+// Requirements: 9.2, 10.1, 10.2, 10.3, 12.8
 type ExecutionReport struct {
 	Summary     ExecutionSummary `json:"summary"`
 	Tasks       []TaskResult     `json:"tasks"`
@@ -31,6 +37,18 @@ type ExecutionReport struct {
 	FailedTaskIDs []string `json:"failed_task_ids,omitempty"`
 	// PendingReviewTaskIDs lists task IDs ready for review
 	PendingReviewTaskIDs []string `json:"pending_review_task_ids,omitempty"`
+
+	// Python-compatible fields (aliases for dispatch_batch.py and dispatch_reviews.py)
+	// Requirements: 10.1, 10.2, 10.3
+	TasksCompleted int          `json:"tasks_completed"`
+	TasksFailed    int          `json:"tasks_failed"`
+	TaskResults    []TaskResult `json:"task_results"`
+	// Review-specific fields for dispatch_reviews.py
+	ReviewsCompleted int          `json:"reviews_completed"`
+	ReviewsFailed    int          `json:"reviews_failed"`
+	ReviewResults    []TaskResult `json:"review_results"`
+	// Errors field for Python scripts
+	Errors []string `json:"errors,omitempty"`
 }
 
 func buildExecutionReport(results []TaskResult, includeMessage bool) ExecutionReport {
@@ -128,5 +146,13 @@ func buildExecutionReport(results []TaskResult, includeMessage bool) ExecutionRe
 		AllFilesChanged:      allFilesChanged,
 		FailedTaskIDs:        failedTaskIDs,
 		PendingReviewTaskIDs: pendingReviewTaskIDs,
+		// Python-compatible fields (Requirements: 10.1, 10.2, 10.3)
+		TasksCompleted:   success,
+		TasksFailed:      failed,
+		TaskResults:      tasks,
+		ReviewsCompleted: success, // Same as tasks for review mode
+		ReviewsFailed:    failed,
+		ReviewResults:    tasks,
+		Errors:           nil, // Populated by caller if needed
 	}
 }

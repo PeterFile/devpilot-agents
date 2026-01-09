@@ -74,11 +74,23 @@ func (r *tmuxTaskRunner) prepareTarget(task TaskSpec) (tmuxTarget, error) {
 	}
 
 	depID := strings.TrimSpace(task.Dependencies[0])
+	
+	// First, try to find window in current batch's local map
 	r.mu.Lock()
 	windowName := r.windowByTask[depID]
 	r.mu.Unlock()
+	
+	// If not found in current batch, try to look up from persisted state
+	// This handles cross-batch dependencies (Requirements: 11.1, 11.2, 11.3, 11.4)
+	if windowName == "" && r.stateWriter != nil {
+		persistedMapping, err := r.stateWriter.GetWindowMapping()
+		if err == nil && persistedMapping != nil {
+			windowName = persistedMapping[depID]
+		}
+	}
+	
 	if windowName == "" {
-		return tmuxTarget{}, fmt.Errorf("dependency window not found for task %q", taskID)
+		return tmuxTarget{}, fmt.Errorf("dependency window not found for task %q (dependency: %q)", taskID, depID)
 	}
 	paneID, err := r.manager.CreatePane(windowName)
 	if err != nil {
