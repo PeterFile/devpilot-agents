@@ -177,6 +177,82 @@ Implementation uses Python for orchestration scripts (consistent with existing c
   - Verify file conflict detection prevents parallel conflicts
   - Verify fix loop workflow handles all scenarios
 
+- [x] 9. Fix Integration Gaps (Audit Findings)
+  - [x] 9.1 Fix dispatch_batch.py to use leaf task filtering and dependency expansion
+    - Replace local `get_ready_tasks()` with import from `spec_parser.py`
+    - Or reimplement using `is_leaf_task()` and `expand_dependencies()` from spec_parser
+    - Ensure parent tasks are never dispatched
+    - _Requirements: 1.1, 1.2, 1.6, 1.7_
+    - _writes: skills/multi-agent-orchestrator/scripts/dispatch_batch.py_
+
+  - [x] 9.2 Fix init_orchestration.py to preserve all Task fields in AGENT_STATE
+    - Update `TaskEntry` dataclass to include `subtasks`, `parent_id`, `writes`, `reads`
+    - Update `convert_task_to_entry()` to copy these fields from parsed Task
+    - Ensure `update_parent_statuses()` can find subtask relationships
+    - _Requirements: 1.3, 1.4, 1.5, 2.1, 2.2_
+    - _writes: skills/multi-agent-orchestrator/scripts/init_orchestration.py_
+
+  - [x] 9.3 Integrate fix loop dispatch into dispatch_batch.py
+    - Add call to `process_fix_loop()` before getting ready tasks
+    - Handle `fix_required` status tasks alongside `not_started` tasks
+    - Dispatch fix requests returned by `process_fix_loop()`
+    - _Requirements: 3.1, 4.6_
+    - _writes: skills/multi-agent-orchestrator/scripts/dispatch_batch.py_
+
+  - [x] 9.4 Write integration test for full dispatch chain
+    - Test that parent tasks are never dispatched
+    - Test that subtasks/parent_id/writes/reads are preserved in AGENT_STATE
+    - Test that fix_required tasks are processed by fix loop
+    - _Requirements: All_
+    - _writes: skills/multi-agent-orchestrator/scripts/test_dispatch_integration.py_
+
+- [x] 10. Checkpoint - Verify audit findings are resolved
+  - Run all tests to ensure fixes work correctly
+  - Verify parent tasks are filtered out in dispatch
+  - Verify file manifest data flows through to conflict detection
+  - Verify fix loop is called during dispatch
+
+- [x] 11. Fix Critical Fix Loop Gaps (New Findings)
+  - [x] 11.1 Add on_fix_task_complete call after fix task execution
+    - Update `dispatch_batch.py` to call `on_fix_task_complete()` when fix task completes
+    - Ensure `fix_attempts` is incremented after each completed fix attempt
+    - Add callback mechanism or explicit call in fix task dispatch flow
+    - _Requirements: 7.1, 7.2, 7.3, 7.6_
+    - _writes: skills/multi-agent-orchestrator/scripts/dispatch_batch.py, skills/multi-agent-orchestrator/scripts/fix_loop.py_
+
+  - [x] 11.2 Add rollback on fix task dispatch failure
+    - Update `process_fix_loop()` to handle dispatch failures
+    - Rollback task status from `in_progress` to `fix_required` on failure
+    - Ensure `fix_attempts` is NOT incremented on dispatch failure
+    - _Requirements: 7.4, 7.5_
+    - _writes: skills/multi-agent-orchestrator/scripts/fix_loop.py_
+
+  - [x] 11.3 Write property test for fix_attempts increment
+    - **Property 11: Fix Attempts Increment**
+    - Test that fix_attempts only increments after successful fix completion
+    - Test that dispatch failure does not increment fix_attempts
+    - **Validates: Requirements 7.1, 7.4, 7.5, 7.6**
+
+  - [x] 11.4 Ensure update_parent_statuses runs after all dispatch paths
+    - Move `update_parent_statuses()` call to end of dispatch cycle using try/finally
+    - Ensure it runs even when only fix tasks are dispatched
+    - Ensure it runs even when dispatch returns early with no ready tasks
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+    - _writes: skills/multi-agent-orchestrator/scripts/dispatch_batch.py_
+
+  - [x] 11.5 Write integration test for fix loop completion flow
+    - Test fix task dispatch → completion → fix_attempts increment → re-review
+    - Test dispatch failure → rollback → retry
+    - Test escalation triggers at correct fix_attempts count
+    - Test human fallback triggers at correct fix_attempts count
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
+
+- [x] 12. Final Checkpoint - Verify all fix loop gaps resolved
+  - Run all tests including new property tests
+  - Verify fix_attempts increments correctly after fix completion
+  - Verify dispatch failure rolls back status correctly
+  - Verify update_parent_statuses runs in all dispatch paths
+
 ## Notes
 
 - Implementation uses Python with hypothesis for property-based testing

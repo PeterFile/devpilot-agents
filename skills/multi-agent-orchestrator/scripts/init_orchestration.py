@@ -47,7 +47,13 @@ COMPLEX_KEYWORDS = ["refactor", "migration", "integration", "architecture"]
 
 @dataclass
 class TaskEntry:
-    """Task entry for AGENT_STATE.json"""
+    """
+    Task entry for AGENT_STATE.json
+    
+    Extended to include subtasks, parent_id, writes, reads for:
+    - Parent status aggregation (Req 1.3, 1.4, 1.5)
+    - File conflict detection (Req 2.1, 2.2)
+    """
     task_id: str
     description: str
     type: str
@@ -57,6 +63,24 @@ class TaskEntry:
     criticality: str
     is_optional: bool
     created_at: str
+    # Parent-subtask relationship fields (Req 1.3, 1.4, 1.5)
+    subtasks: List[str] = field(default_factory=list)
+    parent_id: Optional[str] = None
+    # File manifest fields (Req 2.1, 2.2)
+    writes: List[str] = field(default_factory=list)
+    reads: List[str] = field(default_factory=list)
+    # Fix loop fields (Req 3.10)
+    fix_attempts: int = 0
+    max_fix_attempts: int = 3
+    escalated: bool = False
+    escalated_at: Optional[str] = None
+    original_agent: Optional[str] = None
+    last_review_severity: Optional[str] = None
+    review_history: List[Dict[str, Any]] = field(default_factory=list)
+    blocked_reason: Optional[str] = None
+    blocked_by: Optional[str] = None
+    # Task details for prompt building
+    details: List[str] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -123,7 +147,14 @@ def assign_owner_agent(task: Task) -> str:
 
 
 def convert_task_to_entry(task: Task) -> TaskEntry:
-    """Convert parsed Task to TaskEntry for AGENT_STATE.json"""
+    """
+    Convert parsed Task to TaskEntry for AGENT_STATE.json.
+    
+    Preserves all Task fields including:
+    - subtasks, parent_id for parent status aggregation (Req 1.3, 1.4, 1.5)
+    - writes, reads for file conflict detection (Req 2.1, 2.2)
+    - fix loop fields for retry mechanism (Req 3.10)
+    """
     return TaskEntry(
         task_id=task.task_id,
         description=task.description,
@@ -134,6 +165,24 @@ def convert_task_to_entry(task: Task) -> TaskEntry:
         criticality=determine_criticality(task),
         is_optional=task.is_optional,
         created_at=datetime.utcnow().isoformat() + "Z",
+        # Parent-subtask relationship fields (Req 1.3, 1.4, 1.5)
+        subtasks=task.subtasks,
+        parent_id=task.parent_id,
+        # File manifest fields (Req 2.1, 2.2)
+        writes=task.writes,
+        reads=task.reads,
+        # Fix loop fields (Req 3.10)
+        fix_attempts=task.fix_attempts,
+        max_fix_attempts=task.max_fix_attempts,
+        escalated=task.escalated,
+        escalated_at=task.escalated_at,
+        original_agent=task.original_agent,
+        last_review_severity=task.last_review_severity,
+        review_history=task.review_history,
+        blocked_reason=task.blocked_reason,
+        blocked_by=task.blocked_by,
+        # Task details for prompt building
+        details=task.details,
     )
 
 

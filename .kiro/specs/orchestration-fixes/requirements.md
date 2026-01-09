@@ -106,3 +106,27 @@ These fixes are essential for production-ready orchestration that maintains corr
 4. THE fix prompt SHALL instruct the agent to address all listed issues
 5. WHEN escalating to a different agent, THE System SHALL include the full fix history in the prompt
 
+### Requirement 7: Fix Loop Completion Handling
+
+**User Story:** As an orchestrator, I want fix task completion to properly update fix_attempts, so that escalation and human fallback thresholds are correctly triggered.
+
+#### Acceptance Criteria
+
+1. WHEN a fix task completes successfully, THE System SHALL call on_fix_task_complete to increment fix_attempts
+2. WHEN a fix task completes, THE System SHALL transition the task from in_progress to pending_review
+3. WHEN fix_attempts is incremented, THE System SHALL persist the updated count to AGENT_STATE
+4. WHEN a fix task dispatch fails, THE System SHALL rollback the task status from in_progress to fix_required
+5. WHEN a fix task dispatch fails, THE System SHALL NOT increment fix_attempts
+6. THE System SHALL ensure fix_attempts accurately reflects the number of completed fix attempts
+
+### Requirement 8: Parent Status Update Consistency
+
+**User Story:** As an orchestrator, I want parent status updates to run after all dispatch operations, so that parent task statuses are always consistent with their subtasks.
+
+#### Acceptance Criteria
+
+1. WHEN dispatching only fix tasks (no new tasks), THE System SHALL still call update_parent_statuses after dispatch
+2. WHEN dispatch_batch returns early due to no ready tasks, THE System SHALL still call update_parent_statuses
+3. THE System SHALL call update_parent_statuses at the end of every dispatch cycle regardless of what was dispatched
+4. WHEN update_parent_statuses is called, THE System SHALL persist the updated statuses to AGENT_STATE
+

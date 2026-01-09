@@ -439,7 +439,7 @@ def on_fix_task_complete(state: Dict[str, Any], task_id: str) -> None:
     2. Transition to pending_review
     3. Re-dispatch review (will be picked up by review dispatch logic)
     
-    Requirements: 3.5
+    Requirements: 3.5, 7.1, 7.2, 7.3
     
     Args:
         state: The AGENT_STATE dictionary
@@ -457,6 +457,28 @@ def on_fix_task_complete(state: Dict[str, Any], task_id: str) -> None:
     
     # The review result will determine if we stay in fix loop or exit
     # Review dispatch logic will pick this up
+
+
+def rollback_fix_dispatch(state: Dict[str, Any], task_id: str) -> None:
+    """
+    Rollback task status after fix dispatch failure.
+    
+    - Transition from in_progress back to fix_required
+    - Do NOT increment fix_attempts
+    
+    Requirements: 7.4, 7.5
+    
+    Args:
+        state: The AGENT_STATE dictionary
+        task_id: The task ID that failed to dispatch
+    """
+    task = next((t for t in state.get("tasks", []) if t.get("task_id") == task_id), None)
+    if not task:
+        return
+    
+    # Only rollback if currently in_progress (was set by process_fix_loop)
+    if task.get("status") == "in_progress":
+        task["status"] = "fix_required"
 
 
 def on_review_complete(state: Dict[str, Any], task_id: str, review_findings: List[Dict]) -> None:

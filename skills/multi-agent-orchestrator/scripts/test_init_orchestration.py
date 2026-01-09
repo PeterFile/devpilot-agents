@@ -332,6 +332,57 @@ def test_dispatch_batch_failure_keeps_tasks_not_started():
                 f"Task {task['task_id']} should remain not_started after failed dispatch, got {task['status']}"
 
 
+def test_fix_dispatch_failure_reports_errors():
+    """
+    Test that fix dispatch failure surfaces errors to callers.
+    
+    P1 Fix: Fix dispatch failure should return success False with error details.
+    """
+    from dispatch_batch import dispatch_batch, load_agent_state
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        state_file = Path(tmpdir) / "AGENT_STATE.json"
+        
+        initial_state = {
+            "spec_path": "/test/spec",
+            "session_name": "test-session",
+            "tasks": [
+                {"task_id": "1", "description": "Fix task", "status": "fix_required",
+                 "owner_agent": "kiro-cli", "dependencies": [], "criticality": "standard",
+                 "fix_attempts": 0, "last_review_severity": "major",
+                 "review_history": [{
+                     "attempt": 0,
+                     "severity": "major",
+                     "findings": [{"severity": "major", "summary": "Bug found"}],
+                     "reviewed_at": "2026-01-08T10:00:00Z"
+                 }]},
+            ],
+            "review_findings": [],
+            "final_reports": [],
+            "blocked_items": [],
+            "pending_decisions": [],
+            "deferred_fixes": [],
+            "window_mapping": {},
+        }
+        
+        with open(state_file, 'w') as f:
+            json.dump(initial_state, f)
+        
+        result = dispatch_batch(str(state_file))
+        
+        assert not result.success, "Fix dispatch failure should return success=False"
+        assert result.errors, "Fix dispatch failure should surface errors"
+        assert result.execution_report is not None, \
+            "Execution report should include fix dispatch failure"
+        assert result.execution_report.tasks_failed >= 1, \
+            "Fix dispatch failure should count as failed"
+        
+        final_state = load_agent_state(str(state_file))
+        task = next(t for t in final_state["tasks"] if t["task_id"] == "1")
+        assert task["status"] == "fix_required", \
+            "Fix task should roll back to fix_required after failed dispatch"
+
+
 def test_dispatch_batch_partial_failure_handles_results():
     """
     Test that partial dispatch failure correctly processes available results.

@@ -820,3 +820,154 @@ def test_property_9_format_review_history_structure(history):
         for entry in history:
             assert entry["severity"] in formatted.lower(), \
                 f"Severity {entry['severity']} should be in formatted history"
+
+
+# ============================================================================
+# Property 11: Fix Attempts Increment
+# Feature: orchestration-fixes, Property 11
+# Validates: Requirements 7.1, 7.4, 7.5, 7.6
+# ============================================================================
+
+from fix_loop import on_fix_task_complete, rollback_fix_dispatch
+
+
+@st.composite
+def state_with_in_progress_fix_task_strategy(draw):
+    """Generate state with a task in in_progress status (simulating fix dispatch)."""
+    task_id = draw(task_id_strategy())
+    initial_fix_attempts = draw(st.integers(min_value=0, max_value=2))
+    
+    task = {
+        "task_id": task_id,
+        "description": f"Task {task_id}",
+        "status": "in_progress",  # Set by process_fix_loop before dispatch
+        "fix_attempts": initial_fix_attempts,
+        "review_history": [],
+    }
+    
+    state = {
+        "tasks": [task],
+        "blocked_items": [],
+        "pending_decisions": [],
+    }
+    
+    return state, task_id, initial_fix_attempts
+
+
+@given(data=state_with_in_progress_fix_task_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_11_fix_attempts_increments_on_complete(data):
+    """
+    Property 11: Fix Attempts Increment - Increments on successful completion
+    
+    *For any* fix task that completes successfully, the system shall increment
+    fix_attempts by exactly 1.
+    
+    Feature: orchestration-fixes, Property 11
+    Validates: Requirements 7.1, 7.6
+    """
+    state, task_id, initial_attempts = data
+    
+    # Call on_fix_task_complete (simulating successful fix)
+    on_fix_task_complete(state, task_id)
+    
+    task = next(t for t in state["tasks"] if t["task_id"] == task_id)
+    
+    # fix_attempts should be incremented by exactly 1
+    assert task["fix_attempts"] == initial_attempts + 1, \
+        f"fix_attempts should be {initial_attempts + 1}, got {task['fix_attempts']}"
+    
+    # Status should transition to pending_review
+    assert task["status"] == "pending_review", \
+        f"Status should be pending_review, got {task['status']}"
+
+
+@given(data=state_with_in_progress_fix_task_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_11_fix_attempts_unchanged_on_rollback(data):
+    """
+    Property 11: Fix Attempts Increment - Unchanged on dispatch failure
+    
+    *For any* fix task dispatch that fails, the system shall NOT increment
+    fix_attempts and shall rollback the task status to fix_required.
+    
+    Feature: orchestration-fixes, Property 11
+    Validates: Requirements 7.4, 7.5
+    """
+    state, task_id, initial_attempts = data
+    
+    # Call rollback_fix_dispatch (simulating dispatch failure)
+    rollback_fix_dispatch(state, task_id)
+    
+    task = next(t for t in state["tasks"] if t["task_id"] == task_id)
+    
+    # fix_attempts should NOT be incremented
+    assert task["fix_attempts"] == initial_attempts, \
+        f"fix_attempts should remain {initial_attempts}, got {task['fix_attempts']}"
+    
+    # Status should be rolled back to fix_required
+    assert task["status"] == "fix_required", \
+        f"Status should be fix_required, got {task['status']}"
+
+
+@given(initial_attempts=st.integers(min_value=0, max_value=5))
+@settings(max_examples=100, deadline=None)
+def test_property_11_rollback_only_from_in_progress(initial_attempts):
+    """
+    Property 11: Fix Attempts Increment - Rollback only from in_progress
+    
+    rollback_fix_dispatch should only change status if currently in_progress.
+    
+    Feature: orchestration-fixes, Property 11
+    Validates: Requirements 7.4, 7.5
+    """
+    # Test with fix_required status (should not change)
+    state = {
+        "tasks": [{
+            "task_id": "1",
+            "description": "Task 1",
+            "status": "fix_required",
+            "fix_attempts": initial_attempts,
+        }],
+    }
+    
+    rollback_fix_dispatch(state, "1")
+    
+    task = state["tasks"][0]
+    # Status should remain fix_required (no change)
+    assert task["status"] == "fix_required", \
+        "Status should remain fix_required when already fix_required"
+    assert task["fix_attempts"] == initial_attempts, \
+        "fix_attempts should not change"
+
+
+@given(num_completions=st.integers(min_value=1, max_value=5))
+@settings(max_examples=100, deadline=None)
+def test_property_11_multiple_completions_accumulate(num_completions):
+    """
+    Property 11: Fix Attempts Increment - Multiple completions accumulate
+    
+    *For any* sequence of fix completions, fix_attempts should equal the
+    number of completed fix attempts.
+    
+    Feature: orchestration-fixes, Property 11
+    Validates: Requirements 7.3, 7.6
+    """
+    state = {
+        "tasks": [{
+            "task_id": "1",
+            "description": "Task 1",
+            "status": "in_progress",
+            "fix_attempts": 0,
+        }],
+    }
+    
+    # Simulate multiple fix completions
+    for i in range(num_completions):
+        # Reset status to in_progress (simulating re-dispatch after review failure)
+        state["tasks"][0]["status"] = "in_progress"
+        on_fix_task_complete(state, "1")
+    
+    task = state["tasks"][0]
+    assert task["fix_attempts"] == num_completions, \
+        f"fix_attempts should be {num_completions} after {num_completions} completions"

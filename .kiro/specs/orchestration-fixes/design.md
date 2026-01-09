@@ -1229,3 +1229,146 @@ Integration tests shall verify:
 - Parent status updates during orchestration
 - Human fallback workflow
 
+## Fix Loop Completion Handling (Req 7)
+
+The fix loop has a critical gap: `on_fix_task_complete()` must be called after fix task execution to increment `fix_attempts`. Without this, escalation and human fallback thresholds are never reached.
+
+### Fix Task Dispatch Flow
+
+```python
+def dispatch_fix_task(state: Dict, task: Dict, backend: str, prompt: str) -> bool:
+    """
+    Dispatch a fix task and handle completion/failure.
+    
+    Returns True if dispatch succeeded, False if failed.
+    """
+    task_id = task["task_id"]
+    
+    try:
+        # Transition to in_progress (already done in process_fix_loop)
+        # Dispatch the fix task
+        result = invoke_codeagent_wrapper_single(task_id, backend, prompt)
+        
+        if result.success:
+            # Fix task completed - increment fix_attempts and transition to pending_review
+            on_fix_task_complete(state, task_id)
+            return True
+        else:
+            # Fix task failed - rollback status
+            rollback_fix_dispatch(state, task_id)
+            return False
+            
+    except Exception as e:
+        # Dispatch failed - rollback status
+        logger.error(f"Fix task dispatch failed for {task_id}: {e}")
+        rollback_fix_dispatch(state, task_id)
+        return False
+
+def rollback_fix_dispatch(state: Dict, task_id: str) -> None:
+    """
+    Rollback task status after fix dispatch failure (Req 7.4, 7.5).
+    
+    - Transition from in_progress back to fix_required
+    - Do NOT increment fix_attempts
+    """
+    task = next(t for t in state["tasks"] if t["task_id"] == task_id)
+    task["status"] = "fix_required"
+    logger.warning(f"Rolled back fix dispatch for {task_id}, status restored to fix_required")
+```
+
+### Updated process_fix_loop
+
+```python
+def process_fix_loop(state: Dict) -> List[str]:
+    """
+    Process all tasks in fix_required status.
+    
+    Returns list of task_ids that were dispatched for fixing.
+    """
+    fix_tasks = get_fix_required_tasks(state)
+    dispatched_ids = []
+    
+    for task in fix_tasks:
+        task_id = task["task_id"]
+        completed_attempts = task.get("fix_attempts", 0)
+        
+        # Check if max attempts reached
+        if completed_attempts >= MAX_FIX_ATTEMPTS:
+            trigger_human_fallback(state, task_id)
+            continue
+        
+        # Determine if escalation is needed
+        use_escalation = completed_attempts >= ESCALATION_THRESHOLD
+        
+        # Get findings and create fix request
+        review_history = task.get("review_history", [])
+        latest_findings = review_history[-1].get("findings", []) if review_history else []
+        fix_request = create_fix_request(state, task_id, latest_findings)
+        
+        # Build prompt and determine backend
+        prompt = build_fix_prompt(fix_request, task)
+        backend = "codex" if use_escalation else task.get("owner_agent", "kiro-cli")
+        
+        # Handle escalation tracking
+        if use_escalation and not task.get("escalated"):
+            task["escalated"] = True
+            task["escalated_at"] = datetime.utcnow().isoformat() + "Z"
+            task["original_agent"] = task.get("owner_agent")
+        
+        # Transition to in_progress BEFORE dispatch
+        task["status"] = "in_progress"
+        
+        # Dispatch fix task with completion/failure handling
+        success = dispatch_fix_task(state, task, backend, prompt)
+        
+        if success:
+            dispatched_ids.append(task_id)
+    
+    return dispatched_ids
+```
+
+## Parent Status Update Consistency (Req 8)
+
+The `update_parent_statuses()` function must run at the end of every dispatch cycle, regardless of what was dispatched.
+
+```python
+def dispatch_batch(state: Dict, max_parallel: int = 4) -> Dict:
+    """
+    Main dispatch function with guaranteed parent status update.
+    """
+    try:
+        # Process fix loop first
+        fix_dispatched = process_fix_loop(state)
+        
+        # Get ready tasks (leaf tasks only)
+        ready_tasks = get_ready_leaf_tasks(state)
+        
+        if not ready_tasks and not fix_dispatched:
+            # No tasks to dispatch, but still update parent statuses
+            # This handles the case where subtasks completed externally
+            pass
+        
+        # ... rest of dispatch logic ...
+        
+    finally:
+        # ALWAYS update parent statuses at the end (Req 8.1, 8.2, 8.3)
+        update_parent_statuses(state)
+        
+        # Persist state (Req 8.4)
+        save_agent_state(state)
+    
+    return report
+```
+
+## Property 11: Fix Attempts Increment
+
+*For any* fix task that completes successfully, the system shall increment `fix_attempts` by exactly 1. *For any* fix task dispatch that fails, the system shall NOT increment `fix_attempts` and shall rollback the task status to `fix_required`.
+
+**Validates: Requirements 7.1, 7.4, 7.5, 7.6**
+
+## Property 12: Parent Status Update Guarantee
+
+*For any* dispatch cycle (including fix-only dispatches and early returns), the system shall call `update_parent_statuses()` exactly once at the end of the cycle.
+
+**Validates: Requirements 8.1, 8.2, 8.3**
+

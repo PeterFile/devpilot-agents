@@ -8,8 +8,10 @@ Dispatches ready tasks to worker agents via codeagent-wrapper --parallel.
 - Invokes codeagent-wrapper synchronously
 - Processes Execution Report
 - Detects file conflicts and partitions tasks into safe batches
+- Filters out parent tasks (only leaf tasks are dispatched)
+- Expands parent task dependencies to subtasks
 
-Requirements: 1.3, 1.4, 2.3, 2.4, 2.5, 2.6, 2.7, 9.1, 9.3, 9.4, 9.10
+Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 2.3, 2.4, 2.5, 2.6, 2.7, 9.1, 9.3, 9.4, 9.10
 """
 
 import json
@@ -27,6 +29,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 # Import update_parent_statuses for parent status aggregation (Req 1.3, 1.4, 1.5)
 from init_orchestration import update_parent_statuses
+
+# Import leaf task filtering and dependency expansion from spec_parser (Req 1.1, 1.2, 1.6, 1.7)
+from spec_parser import is_leaf_task, expand_dependencies, Task
+
+# Import fix loop processing (Req 3.1, 4.6)
+from fix_loop import process_fix_loop, get_fix_required_tasks, on_fix_task_complete, rollback_fix_dispatch
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -266,28 +274,65 @@ def get_completed_task_ids(state: Dict[str, Any]) -> Set[str]:
     return completed
 
 
+def _dict_to_task_like(task_dict: Dict[str, Any]) -> Any:
+    """
+    Convert a task dictionary to a Task-like object for use with spec_parser functions.
+    
+    This creates a simple object with the attributes needed by is_leaf_task() and
+    expand_dependencies() without requiring a full Task dataclass.
+    """
+    class TaskLike:
+        def __init__(self, d: Dict[str, Any]):
+            self.task_id = d.get("task_id", "")
+            self.subtasks = d.get("subtasks", [])
+            self.dependencies = d.get("dependencies", [])
+            self.status = d.get("status", "not_started")
+            self.is_optional = d.get("is_optional", False)
+    return TaskLike(task_dict)
+
+
 def get_ready_tasks(state: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Get tasks ready for execution (no unmet dependencies).
+    Get leaf tasks ready for execution (no unmet dependencies).
     
-    Requirement 1.3: Collect ready tasks
+    Rules:
+    1. Task must be a leaf task (no subtasks) - Req 1.1, 1.2
+    2. Task must not be completed or in progress
+    3. All dependencies must be satisfied (including expanded parent deps) - Req 1.6, 1.7
+    4. Optional tasks are skipped
+    
+    Requirements: 1.1, 1.2, 1.3, 1.6, 1.7
     """
     completed = get_completed_task_ids(state)
     ready = []
     
-    for task in state.get("tasks", []):
+    # Build task map for dependency expansion
+    task_map = {}
+    for task_dict in state.get("tasks", []):
+        task_like = _dict_to_task_like(task_dict)
+        task_map[task_like.task_id] = task_like
+    
+    for task_dict in state.get("tasks", []):
+        task_like = _dict_to_task_like(task_dict)
+        
+        # Skip parent tasks (they have subtasks) - Req 1.1, 1.2
+        if not is_leaf_task(task_like):
+            continue
+        
         # Skip non-startable tasks
-        if task.get("status") != "not_started":
+        if task_dict.get("status") != "not_started":
             continue
         
         # Skip optional tasks (marked with is_optional)
-        if task.get("is_optional", False):
+        if task_dict.get("is_optional", False):
             continue
         
-        # Check dependencies
-        dependencies = task.get("dependencies", [])
-        if all(dep in completed for dep in dependencies):
-            ready.append(task)
+        # Expand and check dependencies - Req 1.6, 1.7
+        dependencies = task_dict.get("dependencies", [])
+        expanded_deps = expand_dependencies(dependencies, task_map)
+        
+        if all(dep in completed for dep in expanded_deps):
+            ready.append(task_dict)
     
     return ready
 
@@ -494,6 +539,8 @@ def dispatch_batch(
     Tasks are partitioned into conflict-free batches and dispatched sequentially.
     Each batch completes before the next batch starts, ensuring no file conflicts.
     
+    Also processes fix_required tasks through the fix loop before getting ready tasks.
+    
     Args:
         state_file: Path to AGENT_STATE.json
         workdir: Working directory for tasks
@@ -502,7 +549,7 @@ def dispatch_batch(
     Returns:
         DispatchResult with execution details
     
-    Requirements: 1.3, 1.4, 2.3, 2.4, 2.5, 2.6, 2.7, 9.1, 9.3, 9.4, 9.10
+    Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 4.6, 9.1, 9.3, 9.4, 9.10
     
     Note: Tasks are only marked in_progress after successful dispatch.
           On failure, tasks are rolled back to not_started to allow retry.
@@ -517,10 +564,119 @@ def dispatch_batch(
             errors=[str(e)]
         )
     
-    # Get ready tasks
+    # Process fix loop first (Req 3.1, 4.6)
+    # This handles fix_required tasks and returns fix requests to dispatch
+    fix_requests = process_fix_loop(state)
+    fix_tasks_dispatched = 0
+    fix_dispatch_failures = 0
+    total_dispatched = 0
+    total_completed = 0
+    total_failed = 0
+    all_errors: List[str] = []
+    all_task_results: List[Dict[str, Any]] = []
+    overall_success = True
+    has_execution_report = False
+    
+    if fix_requests:
+        logger.info(f"Processing {len(fix_requests)} fix requests from fix loop")
+        
+        # Dispatch fix requests
+        for fix_req in fix_requests:
+            task_id = fix_req["task_id"]
+            backend = fix_req["backend"]
+            prompt = fix_req["prompt"]
+            
+            # Build a single task config for the fix request
+            fix_config = TaskConfig(
+                task_id=task_id,
+                backend=backend,
+                workdir=workdir,
+                content=prompt,
+                dependencies=[],
+            )
+            
+            if not dry_run:
+                # Invoke codeagent-wrapper for fix task
+                session_name = state.get("session_name", "orchestration")
+                report = invoke_codeagent_wrapper(
+                    [fix_config],
+                    session_name,
+                    state_file,
+                    dry_run=False
+                )
+                
+                has_execution_report = True
+                total_completed += report.tasks_completed
+                total_failed += report.tasks_failed
+                all_errors.extend(report.errors)
+                all_task_results.extend(report.task_results)
+                
+                if report.success:
+                    fix_tasks_dispatched += 1
+                    # Process the fix task result
+                    process_execution_report(state, report)
+                    # Call on_fix_task_complete to increment fix_attempts and transition to pending_review (Req 7.1, 7.2, 7.3)
+                    on_fix_task_complete(state, task_id)
+                else:
+                    overall_success = False
+                    fix_dispatch_failures += 1
+                    # Fix task dispatch failed - rollback status to fix_required (Req 7.4, 7.5)
+                    rollback_fix_dispatch(state, task_id)
+                    logger.warning(f"Fix task {task_id} dispatch failed, rolled back to fix_required")
+                    logger.error(f"Fix task {task_id} dispatch failed: {report.errors}")
+                    if not report.errors:
+                        all_errors.append(f"Fix task {task_id} dispatch failed")
+            else:
+                fix_tasks_dispatched += 1
+                print(f"DRY RUN - Would dispatch fix task: {task_id}")
+        
+        # Save state after fix loop processing
+        if not dry_run:
+            save_agent_state(state_file, state)
+    
+    # Get ready tasks (not_started leaf tasks with satisfied dependencies)
     ready_tasks = get_ready_tasks(state)
     
     if not ready_tasks:
+        # No new tasks ready, but we may have dispatched fix tasks
+        # Always update parent statuses before returning (Req 8.1, 8.2, 8.3)
+        if not dry_run:
+            update_parent_statuses(state)
+            save_agent_state(state_file, state)
+        
+        combined_report = None
+        if has_execution_report:
+            combined_report = ExecutionReport(
+                success=overall_success,
+                tasks_completed=total_completed,
+                tasks_failed=total_failed,
+                task_results=all_task_results,
+                errors=all_errors
+            )
+        
+        if fix_dispatch_failures > 0:
+            if fix_tasks_dispatched > 0:
+                message = (
+                    f"Fix task dispatch failed: {fix_dispatch_failures} failed, "
+                    f"{fix_tasks_dispatched} dispatched"
+                )
+            else:
+                message = f"Fix task dispatch failed: {fix_dispatch_failures} failed"
+            return DispatchResult(
+                success=False,
+                message=message,
+                tasks_dispatched=fix_tasks_dispatched,
+                execution_report=combined_report,
+                errors=all_errors
+            )
+        
+        if fix_tasks_dispatched > 0:
+            return DispatchResult(
+                success=True,
+                message=f"Dispatched {fix_tasks_dispatched} fix task(s), no new tasks ready",
+                tasks_dispatched=fix_tasks_dispatched,
+                execution_report=combined_report
+            )
         return DispatchResult(
             success=True,
             message="No tasks ready for dispatch",
@@ -535,13 +691,6 @@ def dispatch_batch(
     
     spec_path = state.get("spec_path", ".")
     session_name = state.get("session_name", "orchestration")
-    
-    total_dispatched = 0
-    total_completed = 0
-    total_failed = 0
-    all_errors: List[str] = []
-    all_task_results: List[Dict[str, Any]] = []
-    overall_success = True
     
     # Dispatch batches sequentially (Req 2.3, 2.4)
     for batch_idx, batch in enumerate(batches):
@@ -561,6 +710,7 @@ def dispatch_batch(
             dry_run=dry_run
         )
         
+        has_execution_report = True
         total_dispatched += len(configs)
         total_completed += report.tasks_completed
         total_failed += report.tasks_failed
@@ -605,14 +755,28 @@ def dispatch_batch(
         errors=all_errors
     )
     
-    message = f"Dispatched {total_dispatched} tasks in {len(batches)} batch(es)"
+    # Build message including fix tasks info
+    total_all_dispatched = total_dispatched + fix_tasks_dispatched
+    message_parts = []
+    
+    if fix_tasks_dispatched > 0:
+        message_parts.append(f"{fix_tasks_dispatched} fix task(s)")
+    
+    if total_dispatched > 0:
+        message_parts.append(f"{total_dispatched} new task(s) in {len(batches)} batch(es)")
+    
+    if message_parts:
+        message = f"Dispatched {', '.join(message_parts)}"
+    else:
+        message = "No tasks dispatched"
+    
     if not overall_success:
         message = f"Dispatch partially failed: {total_completed} completed, {total_failed} failed"
     
     return DispatchResult(
         success=overall_success,
         message=message,
-        tasks_dispatched=total_dispatched,
+        tasks_dispatched=total_all_dispatched,
         execution_report=combined_report,
         errors=all_errors
     )
