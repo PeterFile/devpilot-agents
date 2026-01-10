@@ -214,6 +214,7 @@ class TaskConfig:
     workdir: str
     content: str
     dependencies: List[str] = field(default_factory=list)
+    target_window: str = ""
     
     def to_heredoc(self) -> str:
         """Convert to heredoc format for codeagent-wrapper"""
@@ -225,6 +226,8 @@ class TaskConfig:
         ]
         if self.dependencies:
             lines.append(f"dependencies: {','.join(self.dependencies)}")
+        if self.target_window:
+            lines.append(f"target_window: {self.target_window}")
         lines.append("---CONTENT---")
         lines.append(self.content)
         return "\n".join(lines)
@@ -415,6 +418,7 @@ def build_task_configs(
     for task in tasks:
         owner_agent = task.get("owner_agent", "kiro-cli")
         backend = AGENT_TO_BACKEND.get(owner_agent, "kiro-cli")
+        target_window = task.get("target_window") or owner_agent
         
         config = TaskConfig(
             task_id=task["task_id"],
@@ -422,6 +426,7 @@ def build_task_configs(
             workdir=workdir,
             content=build_task_content(task, spec_path),
             dependencies=task.get("dependencies", []),
+            target_window=target_window,
         )
         configs.append(config)
     
@@ -526,6 +531,15 @@ def update_task_statuses(
     for task in state.get("tasks", []):
         if task["task_id"] in task_ids:
             task["status"] = new_status
+
+
+def rollback_batch_tasks(state: Dict[str, Any], task_ids: List[str]) -> None:
+    """Reset any in-progress tasks in a failed batch back to not_started."""
+    for task in state.get("tasks", []):
+        if task["task_id"] in task_ids and task.get("status") == "in_progress":
+            task["status"] = "not_started"
+            for field in ["window_id", "pane_id", "exit_code", "output", "error", "completed_at"]:
+                task.pop(field, None)
 
 
 def process_execution_report(
@@ -737,12 +751,23 @@ def dispatch_batch(
         configs = build_task_configs(batch, spec_path, workdir)
         
         # Invoke codeagent-wrapper for this batch
-        report = invoke_codeagent_wrapper(
-            configs,
-            session_name,
-            state_file,
-            dry_run=dry_run
-        )
+        try:
+            report = invoke_codeagent_wrapper(
+                configs,
+                session_name,
+                state_file,
+                dry_run=dry_run
+            )
+        except Exception as e:
+            overall_success = False
+            err_text = str(e)
+            logger.error(f"Batch {batch_idx + 1} failed with exception: {err_text}")
+            all_errors.append(err_text)
+            if not dry_run:
+                rollback_batch_tasks(state, batch_task_ids)
+                update_parent_statuses(state)
+                save_agent_state(state_file, state)
+            continue
         
         has_execution_report = True
         total_dispatched += len(configs)
@@ -767,6 +792,7 @@ def dispatch_batch(
                 if report.task_results:
                     update_task_statuses(state, list(tasks_with_results), "in_progress")
                     process_execution_report(state, report)
+                rollback_batch_tasks(state, batch_task_ids)
                 
                 # Log batch failure
                 logger.error(f"Batch {batch_idx + 1} failed: {report.errors}")

@@ -14,11 +14,11 @@ import (
 )
 
 type tmuxTaskRunner struct {
-	manager     *TmuxManager
-	stateWriter *StateWriter
-	isReview    bool
-	windowFor   string
-	mu          sync.Mutex
+	manager      *TmuxManager
+	stateWriter  *StateWriter
+	isReview     bool
+	windowFor    string
+	mu           sync.Mutex
 	windowByTask map[string]string
 }
 
@@ -59,6 +59,32 @@ func (r *tmuxTaskRunner) prepareTarget(task TaskSpec) (tmuxTarget, error) {
 		}, nil
 	}
 
+	if strings.TrimSpace(task.TargetWindow) != "" {
+		windowName, created, err := r.manager.GetOrCreateWindow(task.TargetWindow)
+		if err != nil {
+			return tmuxTarget{}, err
+		}
+		var target string
+		var paneID string
+		if created {
+			target = fmt.Sprintf("%s:%s", r.manager.config.SessionName, windowName)
+		} else {
+			paneID, err = r.manager.CreatePane(windowName)
+			if err != nil {
+				return tmuxTarget{}, err
+			}
+			target = paneID
+		}
+		r.mu.Lock()
+		r.windowByTask[taskID] = windowName
+		r.mu.Unlock()
+		return tmuxTarget{
+			windowName: windowName,
+			paneID:     paneID,
+			target:     target,
+		}, nil
+	}
+
 	if len(task.Dependencies) == 0 {
 		if _, err := r.manager.CreateWindow(taskID); err != nil {
 			return tmuxTarget{}, err
@@ -74,12 +100,12 @@ func (r *tmuxTaskRunner) prepareTarget(task TaskSpec) (tmuxTarget, error) {
 	}
 
 	depID := strings.TrimSpace(task.Dependencies[0])
-	
+
 	// First, try to find window in current batch's local map
 	r.mu.Lock()
 	windowName := r.windowByTask[depID]
 	r.mu.Unlock()
-	
+
 	// If not found in current batch, try to look up from persisted state
 	// This handles cross-batch dependencies (Requirements: 11.1, 11.2, 11.3, 11.4)
 	if windowName == "" && r.stateWriter != nil {
@@ -88,7 +114,7 @@ func (r *tmuxTaskRunner) prepareTarget(task TaskSpec) (tmuxTarget, error) {
 			windowName = persistedMapping[depID]
 		}
 	}
-	
+
 	if windowName == "" {
 		return tmuxTarget{}, fmt.Errorf("dependency window not found for task %q (dependency: %q)", taskID, depID)
 	}

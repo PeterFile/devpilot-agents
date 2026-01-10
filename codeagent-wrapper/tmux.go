@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
+	"time"
 )
 
 // TmuxConfig holds tmux-related configuration.
@@ -17,6 +19,11 @@ type TmuxConfig struct {
 // TmuxManager manages tmux sessions, windows, and panes.
 type TmuxManager struct {
 	config TmuxConfig
+	mu     sync.Mutex
+	// tracked task windows (excludes main window)
+	windowNames     map[string]bool
+	windowCount     int
+	windowCacheInit bool
 }
 
 // Test hooks for tmux command execution.
@@ -42,12 +49,22 @@ var (
 	}
 )
 
+const (
+	sessionReadyChecks    = 20
+	sessionReadyDelay     = 100 * time.Millisecond
+	sessionReadyExtraWait = 50 * time.Millisecond
+	MaxTaskWindows        = 9
+)
+
 // NewTmuxManager creates a new manager with defaults applied.
 func NewTmuxManager(cfg TmuxConfig) *TmuxManager {
 	if strings.TrimSpace(cfg.MainWindow) == "" {
 		cfg.MainWindow = "main"
 	}
-	return &TmuxManager{config: cfg}
+	return &TmuxManager{
+		config:      cfg,
+		windowNames: make(map[string]bool),
+	}
 }
 
 // SessionExists checks if the tmux session exists.
@@ -66,6 +83,8 @@ func (tm *TmuxManager) EnsureSession() error {
 	if strings.TrimSpace(tm.config.SessionName) == "" {
 		return fmt.Errorf("tmux session name is required")
 	}
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 	if tm.SessionExists() {
 		return nil
 	}
@@ -75,6 +94,9 @@ func (tm *TmuxManager) EnsureSession() error {
 		"-s", tm.config.SessionName,
 		"-n", tm.config.MainWindow,
 	); err != nil {
+		return err
+	}
+	if err := waitForSessionReady(tm.config.SessionName); err != nil {
 		return err
 	}
 	_, _ = tmuxCommandFn(
@@ -93,6 +115,8 @@ func (tm *TmuxManager) CreateWindow(taskID string) (string, error) {
 	if taskID == "" {
 		return "", fmt.Errorf("task id is required")
 	}
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 	output, err := tmuxCommandFn(
 		"new-window",
 		"-t", tm.config.SessionName,
@@ -101,6 +125,10 @@ func (tm *TmuxManager) CreateWindow(taskID string) (string, error) {
 	)
 	if err != nil {
 		return "", err
+	}
+	if !tm.windowNames[taskID] && taskID != tm.config.MainWindow {
+		tm.windowNames[taskID] = true
+		tm.windowCount++
 	}
 	return strings.TrimSpace(output), nil
 }
@@ -114,6 +142,8 @@ func (tm *TmuxManager) CreatePane(targetWindow string) (string, error) {
 	if targetWindow == "" {
 		return "", fmt.Errorf("target window is required")
 	}
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 	target := fmt.Sprintf("%s:%s", tm.config.SessionName, targetWindow)
 	output, err := tmuxCommandFn(
 		"split-window",
@@ -135,6 +165,8 @@ func (tm *TmuxManager) SendCommand(target string, command string) error {
 	if target == "" {
 		return fmt.Errorf("target is required")
 	}
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 	_, err := tmuxCommandFn(
 		"send-keys",
 		"-t", target,
@@ -142,6 +174,17 @@ func (tm *TmuxManager) SendCommand(target string, command string) error {
 		"Enter",
 	)
 	return err
+}
+
+func waitForSessionReady(sessionName string) error {
+	for i := 0; i < sessionReadyChecks; i++ {
+		if tmuxHasSessionFn(sessionName) {
+			time.Sleep(sessionReadyExtraWait)
+			return nil
+		}
+		time.Sleep(sessionReadyDelay)
+	}
+	return fmt.Errorf("session %s not ready after creation", sessionName)
 }
 
 // SetupTaskPanes creates windows or panes for a batch of tasks.
@@ -156,6 +199,19 @@ func (tm *TmuxManager) SetupTaskPanes(tasks []TaskSpec) (map[string]string, erro
 		taskID := strings.TrimSpace(task.ID)
 		if taskID == "" {
 			return nil, fmt.Errorf("task id is required")
+		}
+		if strings.TrimSpace(task.TargetWindow) != "" {
+			windowName, created, err := tm.GetOrCreateWindow(task.TargetWindow)
+			if err != nil {
+				return nil, err
+			}
+			if !created {
+				if _, err := tm.CreatePane(windowName); err != nil {
+					return nil, err
+				}
+			}
+			taskToWindow[taskID] = windowName
+			continue
 		}
 		if len(task.Dependencies) == 0 {
 			if _, err := tm.CreateWindow(taskID); err != nil {
@@ -177,4 +233,69 @@ func (tm *TmuxManager) SetupTaskPanes(tasks []TaskSpec) (map[string]string, erro
 	}
 
 	return taskToWindow, nil
+}
+
+// GetOrCreateWindow returns the window name and whether it was created.
+func (tm *TmuxManager) GetOrCreateWindow(windowName string) (string, bool, error) {
+	if tm == nil {
+		return "", false, fmt.Errorf("tmux manager is nil")
+	}
+	windowName = strings.TrimSpace(windowName)
+	if windowName == "" {
+		return "", false, fmt.Errorf("target window is required")
+	}
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if windowName == tm.config.MainWindow {
+		return windowName, false, nil
+	}
+	if err := tm.ensureWindowCacheLocked(); err != nil {
+		return "", false, err
+	}
+	if tm.windowNames[windowName] {
+		return windowName, false, nil
+	}
+	if tm.windowCount >= MaxTaskWindows {
+		return "", false, fmt.Errorf("max window limit (%d) reached", MaxTaskWindows)
+	}
+	if _, err := tmuxCommandFn(
+		"new-window",
+		"-t", tm.config.SessionName,
+		"-n", windowName,
+		"-P", "-F", "#{window_id}",
+	); err != nil {
+		return "", false, err
+	}
+	tm.windowNames[windowName] = true
+	tm.windowCount++
+	return windowName, true, nil
+}
+
+func (tm *TmuxManager) ensureWindowCacheLocked() error {
+	if tm.windowCacheInit {
+		return nil
+	}
+	output, err := tmuxCommandFn(
+		"list-windows",
+		"-t", tm.config.SessionName,
+		"-F", "#{window_name}",
+	)
+	if err != nil {
+		return err
+	}
+	tm.windowNames = make(map[string]bool)
+	tm.windowCount = 0
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		name := strings.TrimSpace(line)
+		if name == "" || name == tm.config.MainWindow {
+			continue
+		}
+		if !tm.windowNames[name] {
+			tm.windowNames[name] = true
+			tm.windowCount++
+		}
+	}
+	tm.windowCacheInit = true
+	return nil
 }

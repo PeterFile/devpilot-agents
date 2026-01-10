@@ -84,15 +84,32 @@ func TestTmuxSessionPersistenceProperty(t *testing.T) {
 // in detached mode (-d flag), which is essential for persistence.
 func TestTmuxSessionDetachedCreation(t *testing.T) {
 	orig := tmuxCommandFn
-	t.Cleanup(func() { tmuxCommandFn = orig })
+	origHas := tmuxHasSessionFn
+	t.Cleanup(func() {
+		tmuxCommandFn = orig
+		tmuxHasSessionFn = origHas
+	})
 
 	var newSessionArgs []string
+	sessionExists := false
+	sessionName := ""
 
 	tmuxCommandFn = func(args ...string) (string, error) {
 		if len(args) > 0 && args[0] == "new-session" {
 			newSessionArgs = args
+			for i := 0; i < len(args)-1; i++ {
+				if args[i] == "-s" {
+					sessionName = args[i+1]
+					sessionExists = true
+					break
+				}
+			}
 		}
 		return "", nil
+	}
+
+	tmuxHasSessionFn = func(session string) bool {
+		return sessionExists && session == sessionName
 	}
 
 	tm := NewTmuxManager(TmuxConfig{SessionName: "detach-test"})
@@ -292,7 +309,7 @@ func TestTmuxDependentTaskPanesPersistence(t *testing.T) {
 
 	// Create tasks with dependencies
 	tasks := []TaskSpec{
-		{ID: "task-001"},                              // Independent
+		{ID: "task-001"}, // Independent
 		{ID: "task-002", Dependencies: []string{"task-001"}}, // Dependent on task-001
 		{ID: "task-003", Dependencies: []string{"task-001"}}, // Also dependent on task-001
 	}

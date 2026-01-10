@@ -41,6 +41,7 @@ type TaskSpec struct {
 	Dependencies []string        `json:"dependencies,omitempty"`
 	SessionID    string          `json:"session_id,omitempty"`
 	Backend      string          `json:"backend,omitempty"`
+	TargetWindow string          `json:"target_window,omitempty"`
 	Mode         string          `json:"-"`
 	UseStdin     bool            `json:"-"`
 	Context      context.Context `json:"-"`
@@ -165,6 +166,8 @@ func parseParallelConfig(data []byte) (*ParallelConfig, error) {
 						task.Dependencies = append(task.Dependencies, dep)
 					}
 				}
+			case "target_window":
+				task.TargetWindow = value
 			}
 		}
 
