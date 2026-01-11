@@ -189,7 +189,12 @@ if __name__ == "__main__":
 # Feature: orchestration-fixes
 # ============================================================================
 
-from spec_parser import is_leaf_task, get_ready_tasks
+from spec_parser import (
+    is_leaf_task,
+    get_ready_tasks,
+    is_dispatch_unit,
+    get_dispatchable_units,
+)
 
 
 @st.composite
@@ -368,6 +373,86 @@ def test_property_1_leaf_task_completed_excluded(data):
             assert lid in ready_ids, f"Non-completed leaf task {lid} should be in ready tasks"
 
 
+# ============================================================================  
+# Property Tests for Dispatch Unit Identification
+# Feature: task-dispatch-granularity
+# Property 1: Dispatch Unit Selection
+# Validates: Requirements 1.1, 1.2, 1.3, 4.3
+# ============================================================================  
+
+@st.composite
+def dispatch_unit_task_strategy(draw):
+    """Generate tasks that are parent, standalone, or leaf-with-parent."""
+    kind = draw(st.sampled_from(["parent", "standalone", "leaf"]))
+
+    if kind == "parent":
+        parent_id = str(draw(st.integers(min_value=1, max_value=20)))
+        num_subtasks = draw(st.integers(min_value=1, max_value=4))
+        subtask_ids = [f"{parent_id}.{i}" for i in range(1, num_subtasks + 1)]
+        task = Task(
+            task_id=parent_id,
+            description=f"Parent task {parent_id}",
+            subtasks=subtask_ids,
+        )
+        expected = True
+    elif kind == "standalone":
+        task_id = str(draw(st.integers(min_value=1, max_value=200)))
+        task = Task(
+            task_id=task_id,
+            description=f"Standalone task {task_id}",
+        )
+        expected = True
+    else:
+        parent_id = str(draw(st.integers(min_value=1, max_value=20)))
+        leaf_id = f"{parent_id}.{draw(st.integers(min_value=1, max_value=5))}"
+        task = Task(
+            task_id=leaf_id,
+            description=f"Leaf task {leaf_id}",
+            parent_id=parent_id,
+        )
+        expected = False
+
+    return {"task": task, "expected": expected}
+
+
+@given(data=dispatch_unit_task_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_1_dispatch_unit_identification(data):
+    """
+    Property 1: Dispatch Unit Selection - Identification
+
+    For any task, is_dispatch_unit SHALL return True iff the task is a parent
+    task (has subtasks) or a standalone task (no parent, no subtasks).
+
+    Feature: task-dispatch-granularity, Property 1
+    Validates: Requirements 1.1, 1.2, 1.3
+    """
+    task = data["task"]
+    expected = data["expected"]
+    assert is_dispatch_unit(task) == expected
+
+
+@given(data=mixed_tasks_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_1_dispatch_unit_selection_only_parents_and_standalone(data):
+    """
+    Property 1: Dispatch Unit Selection - Only parent/standalone tasks dispatchable
+
+    For any task hierarchy, get_dispatchable_units SHALL return exactly the
+    union of parent tasks and standalone tasks, excluding leaf tasks with parents.
+
+    Feature: task-dispatch-granularity, Property 1
+    Validates: Requirements 1.1, 1.2, 1.3, 4.3
+    """
+    tasks = data["tasks"]
+    completed_ids = set()
+
+    dispatchable = get_dispatchable_units(tasks, completed_ids)
+    dispatchable_ids = {t.task_id for t in dispatchable}
+
+    expected_ids = {t.task_id for t in tasks if is_dispatch_unit(t)}
+    assert dispatchable_ids == expected_ids, \
+        f"Expected dispatchable {expected_ids}, got {dispatchable_ids}"
 # ============================================================================
 # Property Tests for Dependency Expansion
 # Feature: orchestration-fixes
@@ -577,7 +662,7 @@ def test_property_3_dependency_expansion_ready_waits_for_all_subtasks(hierarchy)
     """
     Property 3: Dependency Expansion - Ready waits for all subtasks
     
-    For any task depending on a parent, get_ready_tasks SHALL NOT return
+    For any task depending on a parent, get_dispatchable_units SHALL NOT return
     that task until ALL subtasks of the parent are completed.
     
     Feature: orchestration-fixes, Property 3
@@ -605,23 +690,23 @@ def test_property_3_dependency_expansion_ready_waits_for_all_subtasks(hierarchy)
     
     all_tasks = list(task_map.values()) + [dependent]
     
-    # With no completions, dependent should NOT be ready
-    ready = get_ready_tasks(all_tasks, set())
-    ready_ids = {t.task_id for t in ready}
-    assert "99" not in ready_ids, "Dependent should not be ready with no completions"
+    # With no completions, dependent should NOT be dispatchable
+    dispatchable = get_dispatchable_units(all_tasks, set())
+    dispatchable_ids = {t.task_id for t in dispatchable}
+    assert "99" not in dispatchable_ids, "Dependent should not be ready with no completions"
     
     # With partial completions, dependent should NOT be ready
     if len(expected_leaves) > 1:
         partial = set(expected_leaves[:-1])  # All but one
-        ready = get_ready_tasks(all_tasks, partial)
-        ready_ids = {t.task_id for t in ready}
-        assert "99" not in ready_ids, "Dependent should not be ready with partial completions"
+        dispatchable = get_dispatchable_units(all_tasks, partial)
+        dispatchable_ids = {t.task_id for t in dispatchable}
+        assert "99" not in dispatchable_ids, "Dependent should not be ready with partial completions"
     
     # With all subtasks completed, dependent SHOULD be ready
     all_completed = set(expected_leaves)
-    ready = get_ready_tasks(all_tasks, all_completed)
-    ready_ids = {t.task_id for t in ready}
-    assert "99" in ready_ids, "Dependent should be ready when all subtasks completed"
+    dispatchable = get_dispatchable_units(all_tasks, all_completed)
+    dispatchable_ids = {t.task_id for t in dispatchable}
+    assert "99" in dispatchable_ids, "Dependent should be ready when all subtasks completed"
 
 
 # ============================================================================

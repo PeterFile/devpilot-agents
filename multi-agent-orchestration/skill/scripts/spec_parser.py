@@ -578,6 +578,57 @@ def expand_dependencies(dependencies: List[str], task_map: Dict[str, 'Task']) ->
     return list(dict.fromkeys(expanded))
 
 
+def is_dispatch_unit(task: Task) -> bool:
+    """
+    Check if task is a dispatch unit (can be dispatched independently).
+
+    A task is a dispatch unit if:
+    - It has subtasks (parent task), OR
+    - It has no subtasks AND no parent (standalone task)
+
+    Leaf tasks with parents are NOT dispatch units.
+
+    Requirements: 1.1, 1.2, 1.3
+    """
+    if task.subtasks:
+        return True
+    if task.parent_id is None:
+        return True
+    return False
+
+
+def get_dispatchable_units(tasks: List[Task], completed_ids: Set[str]) -> List[Task]:
+    """
+    Get dispatch units ready for execution.
+
+    Returns parent tasks and standalone tasks whose dependencies are satisfied.
+    Does NOT return leaf tasks that belong to a parent.
+
+    Requirements: 1.1, 1.2, 1.3, 4.3
+    """
+    ready = []
+    task_map = {t.task_id: t for t in tasks}
+
+    for task in tasks:
+        # Only consider dispatch units
+        if not is_dispatch_unit(task):
+            continue
+
+        # Skip completed or non-startable
+        status_value = task.status
+        if isinstance(status_value, TaskStatus):
+            status_value = status_value.value
+        if task.task_id in completed_ids or status_value != TaskStatus.NOT_STARTED.value:
+            continue
+
+        # Check dependencies (expand parent deps to subtasks)
+        expanded_deps = expand_dependencies(task.dependencies, task_map)
+        if all(dep in completed_ids for dep in expanded_deps):
+            ready.append(task)
+
+    return ready
+
+
 def is_leaf_task(task: Task) -> bool:
     """
     Check if task is a leaf task (has no subtasks).
