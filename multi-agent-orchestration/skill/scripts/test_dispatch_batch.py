@@ -16,6 +16,13 @@ from dispatch_batch import (
     detect_file_conflicts,
     partition_by_conflicts,
     has_file_manifest,
+    DispatchPayload,
+    SubtaskInfo,
+    build_dispatch_payload,
+    allocate_windows,
+    apply_window_allocation,
+    handle_partial_completion,
+    _build_dispatch_unit_content,
 )
 
 
@@ -174,9 +181,138 @@ def mixed_tasks_strategy(draw):
     }
 
 
-# ============================================================================
+@st.composite
+def subtask_details_strategy(draw):
+    """Generate a list of short detail strings."""
+    alphabet = string.ascii_letters + string.digits + " -_,.;:()"
+    return draw(st.lists(
+        st.text(alphabet=alphabet, min_size=0, max_size=40),
+        min_size=0,
+        max_size=3
+    ))
+
+
+@st.composite
+def dispatch_unit_parent_strategy(draw):
+    """Generate a parent dispatch unit with subtasks and full task list."""
+    parent_id = str(draw(st.integers(min_value=1, max_value=20)))
+    num_subtasks = draw(st.integers(min_value=1, max_value=5))
+    subtask_ids = [f"{parent_id}.{i}" for i in range(1, num_subtasks + 1)]
+    shuffled_subtasks = list(draw(st.permutations(subtask_ids)))
+
+    # Build subtasks with details
+    all_tasks = []
+    for sid in subtask_ids:
+        all_tasks.append({
+            "task_id": sid,
+            "description": f"Subtask {sid}",
+            "details": draw(subtask_details_strategy()),
+            "is_optional": draw(st.booleans()),
+        })
+
+    # Optional manifest metadata
+    writes = draw(st.lists(file_path_strategy(), min_size=0, max_size=3))
+    reads = draw(st.lists(file_path_strategy(), min_size=0, max_size=3))
+    criticality = draw(st.sampled_from([None, "standard", "complex", "security-sensitive"]))
+
+    dispatch_unit = {
+        "task_id": parent_id,
+        "description": f"Parent task {parent_id}",
+        "subtasks": shuffled_subtasks,
+        "criticality": criticality,
+        "writes": writes,
+        "reads": reads,
+    }
+
+    return {
+        "dispatch_unit": dispatch_unit,
+        "all_tasks": all_tasks,
+        "subtask_ids": subtask_ids,
+    }
+
+
+@st.composite
+def dispatch_unit_standalone_strategy(draw):
+    """Generate a standalone dispatch unit with no subtasks."""
+    task_id = str(draw(st.integers(min_value=1, max_value=200)))
+    details = draw(subtask_details_strategy())
+    writes = draw(st.lists(file_path_strategy(), min_size=0, max_size=3))
+    reads = draw(st.lists(file_path_strategy(), min_size=0, max_size=3))
+    criticality = draw(st.sampled_from([None, "standard", "complex", "security-sensitive"]))
+
+    dispatch_unit = {
+        "task_id": task_id,
+        "description": f"Standalone task {task_id}",
+        "details": details,
+        "criticality": criticality,
+        "writes": writes,
+        "reads": reads,
+    }
+
+    return {
+        "dispatch_unit": dispatch_unit,
+        "all_tasks": [dispatch_unit],
+    }
+
+
+@st.composite
+def dispatch_unit_hierarchy_strategy(draw):
+    """Generate tasks with parents, subtasks, and standalone units."""
+    tasks = []
+    dispatch_unit_ids = []
+
+    num_parents = draw(st.integers(min_value=1, max_value=3))
+    for p in range(1, num_parents + 1):
+        parent_id = str(p)
+        num_subtasks = draw(st.integers(min_value=1, max_value=4))
+        subtask_ids = [f"{parent_id}.{i}" for i in range(1, num_subtasks + 1)]
+
+        tasks.append({
+            "task_id": parent_id,
+            "description": f"Parent {parent_id}",
+            "subtasks": subtask_ids,
+            "parent_id": None,
+        })
+        dispatch_unit_ids.append(parent_id)
+
+        for sid in subtask_ids:
+            tasks.append({
+                "task_id": sid,
+                "description": f"Subtask {sid}",
+                "subtasks": [],
+                "parent_id": parent_id,
+            })
+
+    num_standalone = draw(st.integers(min_value=0, max_value=3))
+    for i in range(num_standalone):
+        task_id = str(100 + i)
+        tasks.append({
+            "task_id": task_id,
+            "description": f"Standalone {task_id}",
+            "subtasks": [],
+            "parent_id": None,
+        })
+        dispatch_unit_ids.append(task_id)
+
+    return {"tasks": tasks, "dispatch_unit_ids": dispatch_unit_ids}
+
+
+def _sort_task_ids(task_ids: List[str]) -> List[str]:
+    """Sort task IDs like '1.2.3' using numeric ordering."""
+    def key(tid: str) -> List[Any]:
+        parts: List[Any] = []
+        for part in tid.split("."):
+            if part.isdigit():
+                parts.append(int(part))
+            else:
+                parts.append(part)
+        return parts
+    return sorted(task_ids, key=key)
+
+
+# ============================================================================  
 # Property Tests
-# ============================================================================
+# ============================================================================  
 
 @given(data=conflicting_tasks_strategy())
 @settings(max_examples=100, deadline=None)
@@ -408,8 +544,239 @@ def test_has_file_manifest_with_manifest(task):
 @settings(max_examples=100, deadline=None)
 def test_has_file_manifest_without_manifest(task):
     """
-    Test has_file_manifest returns False for tasks without writes or reads.
-    
+    Test has_file_manifest returns False for tasks without writes or reads.     
+
     Validates: Requirements 2.5
     """
     assert not has_file_manifest(task), "Task without writes/reads should not have manifest"
+
+
+# ============================================================================  
+# Property Tests for Dispatch Payload Structure
+# Feature: task-dispatch-granularity
+# Property 4: Payload Structure Completeness
+# Validates: Requirements 5.1, 5.2, 5.3
+# ============================================================================  
+
+@given(data=dispatch_unit_parent_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_4_payload_parent_includes_ordered_subtasks(data):
+    """
+    Property 4: Payload Structure Completeness - Parent tasks
+
+    For any parent dispatch unit, build_dispatch_payload SHALL include all
+    subtasks in sorted order with descriptions and details.
+
+    Feature: task-dispatch-granularity, Property 4
+    Validates: Requirements 5.1, 5.2, 5.3
+    """
+    dispatch_unit = data["dispatch_unit"]
+    all_tasks = data["all_tasks"]
+    spec_path = "specs/task-dispatch-granularity"
+
+    payload = build_dispatch_payload(dispatch_unit, all_tasks, spec_path)
+
+    assert isinstance(payload, DispatchPayload)
+    assert payload.dispatch_unit_id == dispatch_unit["task_id"]
+    assert payload.description == dispatch_unit["description"]
+    assert payload.spec_path == spec_path
+
+    expected_order = _sort_task_ids(data["subtask_ids"])
+    actual_order = [s.task_id for s in payload.subtasks]
+    assert actual_order == expected_order, \
+        f"Expected subtask order {expected_order}, got {actual_order}"
+
+    # Verify subtask details are preserved
+    task_map = {t["task_id"]: t for t in all_tasks}
+    for subtask in payload.subtasks:
+        assert isinstance(subtask, SubtaskInfo)
+        source = task_map[subtask.task_id]
+        assert subtask.description == source["description"]
+        assert subtask.details == source.get("details", [])
+
+    # Verify metadata fields
+    assert payload.metadata.get("criticality") == dispatch_unit.get("criticality")
+    assert payload.metadata.get("writes") == dispatch_unit.get("writes", [])
+    assert payload.metadata.get("reads") == dispatch_unit.get("reads", [])
+
+
+@given(data=dispatch_unit_standalone_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_4_payload_standalone_single_item(data):
+    """
+    Property 4: Payload Structure Completeness - Standalone tasks
+
+    For any standalone dispatch unit, build_dispatch_payload SHALL include
+    the task as a single subtask work item.
+
+    Feature: task-dispatch-granularity, Property 4
+    Validates: Requirements 5.1, 5.2, 5.3
+    """
+    dispatch_unit = data["dispatch_unit"]
+    all_tasks = data["all_tasks"]
+    spec_path = "specs/task-dispatch-granularity"
+
+    payload = build_dispatch_payload(dispatch_unit, all_tasks, spec_path)
+
+    assert len(payload.subtasks) == 1
+    subtask = payload.subtasks[0]
+    assert subtask.task_id == dispatch_unit["task_id"]
+    assert subtask.description == dispatch_unit["description"]
+    assert subtask.details == dispatch_unit.get("details", [])
+
+    assert payload.metadata.get("criticality") == dispatch_unit.get("criticality")
+    assert payload.metadata.get("writes") == dispatch_unit.get("writes", [])
+    assert payload.metadata.get("reads") == dispatch_unit.get("reads", [])
+
+
+# ============================================================================
+# Property Tests for Window Allocation (Dispatch Units)
+# Feature: task-dispatch-granularity
+# Property 5: Window Allocation Invariant
+# Validates: Requirements 6.1, 6.3
+# ============================================================================
+
+@given(data=dispatch_unit_hierarchy_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_5_window_allocation_one_per_dispatch_unit(data):
+    """
+    Property 5: Window Allocation Invariant
+
+    For any set of dispatch units, allocate_windows SHALL assign exactly one
+    window per dispatch unit and not include subtasks.
+
+    Feature: task-dispatch-granularity, Property 5
+    Validates: Requirements 6.1, 6.3
+    """
+    tasks = data["tasks"]
+    dispatch_unit_ids = data["dispatch_unit_ids"]
+    dispatch_units = [t for t in tasks if t["task_id"] in dispatch_unit_ids]
+
+    mapping = allocate_windows(dispatch_units, max_windows=len(dispatch_units) + 1)
+
+    assert set(mapping.keys()) == set(dispatch_unit_ids), \
+        f"Expected windows for {dispatch_unit_ids}, got {list(mapping.keys())}"
+    assert len(set(mapping.values())) == len(mapping), \
+        "Each dispatch unit should have a unique window"
+
+
+@given(data=dispatch_unit_hierarchy_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_5_window_allocation_skips_subtasks(data):
+    """
+    Property 5: Window Allocation - Subtasks ignored
+
+    apply_window_allocation SHALL set target_window only for dispatch units.
+    """
+    state = {"tasks": data["tasks"], "window_mapping": {}}
+    dispatch_unit_ids = set(data["dispatch_unit_ids"])
+    dispatch_units = [t for t in state["tasks"] if t["task_id"] in dispatch_unit_ids]
+
+    apply_window_allocation(state, dispatch_units, max_windows=len(dispatch_units) + 1)
+
+    for task in state["tasks"]:
+        if task["task_id"] in dispatch_unit_ids:
+            assert task.get("target_window"), \
+                f"Dispatch unit {task['task_id']} should have target_window"
+        else:
+            assert not task.get("target_window"), \
+                f"Subtask {task['task_id']} should not get target_window"
+
+
+# ============================================================================
+# Property Tests for Failure Isolation
+# Feature: task-dispatch-granularity
+# Property 8: Subtask Failure Isolation
+# Validates: Requirements 8.2, 8.4
+# ============================================================================
+
+@st.composite
+def partial_failure_state_strategy(draw):
+    """Generate a state with a parent and subtasks for partial failure."""
+    parent_id = "1"
+    num_subtasks = draw(st.integers(min_value=2, max_value=5))
+    subtask_ids = [f"{parent_id}.{i}" for i in range(1, num_subtasks + 1)]
+
+    completed_count = draw(st.integers(min_value=0, max_value=num_subtasks - 1))
+    completed_subtasks = draw(st.lists(
+        st.sampled_from(subtask_ids),
+        min_size=completed_count,
+        max_size=completed_count,
+        unique=True
+    ))
+
+    remaining = [sid for sid in subtask_ids if sid not in completed_subtasks]
+    failed_subtask = draw(st.sampled_from(remaining))
+
+    tasks = [{
+        "task_id": parent_id,
+        "description": "Parent task",
+        "status": "not_started",
+        "subtasks": subtask_ids,
+    }]
+
+    for sid in subtask_ids:
+        tasks.append({
+            "task_id": sid,
+            "description": f"Subtask {sid}",
+            "status": "not_started",
+            "parent_id": parent_id,
+            "subtasks": [],
+        })
+
+    return {
+        "state": {"tasks": tasks},
+        "parent_id": parent_id,
+        "completed_subtasks": completed_subtasks,
+        "failed_subtask": failed_subtask,
+    }
+
+
+@given(data=partial_failure_state_strategy())
+@settings(max_examples=100, deadline=None)
+def test_property_8_failure_isolation_preserves_completed(data):
+    """
+    Property 8: Subtask Failure Isolation
+
+    Completed subtasks remain completed, failed subtask is blocked, and parent
+    is blocked when a subtask fails.
+    """
+    state = data["state"]
+    parent_id = data["parent_id"]
+    completed_subtasks = data["completed_subtasks"]
+    failed_subtask = data["failed_subtask"]
+    error = "subtask failed"
+
+    handle_partial_completion(
+        state,
+        dispatch_unit_id=parent_id,
+        completed_subtasks=completed_subtasks,
+        failed_subtask=failed_subtask,
+        error=error
+    )
+
+    task_map = {t["task_id"]: t for t in state["tasks"]}
+    for sid in completed_subtasks:
+        assert task_map[sid]["status"] == "completed"
+
+    assert task_map[failed_subtask]["status"] == "blocked"
+    assert task_map[failed_subtask].get("blocked_reason") == error
+    assert task_map[parent_id]["status"] == "blocked"
+    assert task_map[parent_id].get("blocked_by") == failed_subtask
+
+
+def test_resume_guidance_includes_first_incomplete_subtask():
+    """Ensure resume guidance highlights the first incomplete subtask."""
+    parent = {
+        "task_id": "1",
+        "description": "Parent task",
+        "subtasks": ["1.1", "1.2"],
+    }
+    all_tasks = [
+        parent,
+        {"task_id": "1.1", "description": "Subtask 1.1", "status": "completed", "subtasks": [], "parent_id": "1"},
+        {"task_id": "1.2", "description": "Subtask 1.2", "status": "not_started", "subtasks": [], "parent_id": "1"},
+    ]
+
+    content = _build_dispatch_unit_content(parent, "/spec", all_tasks)
+    assert "Resume from Step 2: 1.2" in content

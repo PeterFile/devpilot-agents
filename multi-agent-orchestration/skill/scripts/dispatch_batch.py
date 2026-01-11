@@ -8,7 +8,7 @@ Dispatches ready tasks to worker agents via codeagent-wrapper --parallel.
 - Invokes codeagent-wrapper synchronously
 - Processes Execution Report
 - Detects file conflicts and partitions tasks into safe batches
-- Filters out parent tasks (only leaf tasks are dispatched)
+- Dispatches parent tasks (dispatch units) with their subtasks
 - Expands parent task dependencies to subtasks
 - Uses strict dependency completion (only 'completed' status satisfies dependencies)
 
@@ -21,7 +21,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Set
 
@@ -31,8 +31,14 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Import update_parent_statuses for parent status aggregation (Req 1.3, 1.4, 1.5)
 from init_orchestration import update_parent_statuses
 
-# Import leaf task filtering and dependency expansion from spec_parser (Req 1.1, 1.2, 1.6, 1.7)
-from spec_parser import is_leaf_task, expand_dependencies, Task
+# Import task filtering and dependency expansion from spec_parser (Req 1.1, 1.2, 1.6, 1.7)
+from spec_parser import (
+    is_leaf_task,
+    is_dispatch_unit,
+    get_dispatchable_units,
+    expand_dependencies,
+    Task,
+)
 
 # Import fix loop processing (Req 3.1, 4.6)
 from fix_loop import process_fix_loop, get_fix_required_tasks, on_fix_task_complete, rollback_fix_dispatch
@@ -64,6 +70,87 @@ class FileConflict:
     
     def __str__(self) -> str:
         return f"FileConflict({self.task_a} <-> {self.task_b}: {', '.join(self.files)})"
+
+
+@dataclass
+class SubtaskInfo:
+    """Information about a subtask within a dispatch unit."""
+    task_id: str
+    description: str
+    details: List[str] = field(default_factory=list)
+    is_optional: bool = False
+
+
+@dataclass
+class DispatchPayload:
+    """Payload for dispatching a task group to an agent."""
+    dispatch_unit_id: str
+    description: str
+    subtasks: List[SubtaskInfo]
+    spec_path: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+def _task_id_sort_key(task_id: str) -> List[Any]:
+    """Sort key for task IDs like '1.2.3' using numeric ordering."""
+    key: List[Any] = []
+    for part in task_id.split("."):
+        if part.isdigit():
+            key.append(int(part))
+        else:
+            key.append(part)
+    return key
+
+
+def build_dispatch_payload(
+    dispatch_unit: Dict[str, Any],
+    all_tasks: List[Dict[str, Any]],
+    spec_path: str
+) -> DispatchPayload:
+    """
+    Build dispatch payload for a dispatch unit.
+
+    For parent tasks: includes all subtasks in order.
+    For standalone tasks: includes the task as a single-item work unit.
+
+    Requirements: 5.1, 5.2, 5.3
+    """
+    task_id = dispatch_unit["task_id"]
+    subtask_ids = dispatch_unit.get("subtasks", [])
+
+    task_map = {t.get("task_id"): t for t in all_tasks}
+    subtasks: List[SubtaskInfo] = []
+
+    if subtask_ids:
+        for sid in sorted(subtask_ids, key=_task_id_sort_key):
+            st = task_map.get(sid)
+            if not st:
+                continue
+            subtasks.append(SubtaskInfo(
+                task_id=st.get("task_id", ""),
+                description=st.get("description", ""),
+                details=st.get("details", []),
+                is_optional=st.get("is_optional", False),
+            ))
+    else:
+        subtasks.append(SubtaskInfo(
+            task_id=task_id,
+            description=dispatch_unit.get("description", ""),
+            details=dispatch_unit.get("details", []),
+            is_optional=dispatch_unit.get("is_optional", False),
+        ))
+
+    return DispatchPayload(
+        dispatch_unit_id=task_id,
+        description=dispatch_unit.get("description", ""),
+        subtasks=subtasks,
+        spec_path=spec_path,
+        metadata={
+            "criticality": dispatch_unit.get("criticality"),
+            "writes": dispatch_unit.get("writes", []),
+            "reads": dispatch_unit.get("reads", []),
+        }
+    )
 
 
 def has_file_manifest(task: Dict[str, Any]) -> bool:
@@ -209,16 +296,37 @@ def partition_by_conflicts(
 
 @dataclass
 class TaskConfig:
-    """Task configuration for codeagent-wrapper"""
+    """
+    Task configuration for codeagent-wrapper.
+    
+    Supports two dispatch modes:
+    1. Dispatch Unit Mode: Parent task with subtasks - agent executes all subtasks sequentially
+    2. Standalone Mode: Single task without subtasks - traditional dispatch
+    
+    Requirements: 5.3
+    """
     task_id: str
     backend: str
     workdir: str
     content: str
     dependencies: List[str] = field(default_factory=list)
     target_window: str = ""
+    # Dispatch unit fields (Requirement 5.3)
+    subtasks: List[str] = field(default_factory=list)
+    is_dispatch_unit: bool = False
     
     def to_heredoc(self) -> str:
-        """Convert to heredoc format for codeagent-wrapper"""
+        """
+        Convert to heredoc format for codeagent-wrapper.
+        
+        For dispatch units (parent tasks with subtasks), includes:
+        - is_dispatch_unit: true
+        - subtasks: comma-separated list of subtask IDs
+        
+        For standalone tasks, maintains backward compatibility with existing format.
+        
+        Requirements: 5.3
+        """
         lines = [
             "---TASK---",
             f"id: {self.task_id}",
@@ -229,6 +337,13 @@ class TaskConfig:
             lines.append(f"dependencies: {','.join(self.dependencies)}")
         if self.target_window:
             lines.append(f"target_window: {self.target_window}")
+        
+        # Add dispatch unit fields if this is a parent task dispatch
+        if self.is_dispatch_unit:
+            lines.append("is_dispatch_unit: true")
+            if self.subtasks:
+                lines.append(f"subtasks: {','.join(self.subtasks)}")
+        
         lines.append("---CONTENT---")
         lines.append(self.content)
         return "\n".join(lines)
@@ -321,6 +436,7 @@ def _dict_to_task_like(task_dict: Dict[str, Any]) -> Any:
             self.dependencies = d.get("dependencies", [])
             self.status = d.get("status", "not_started")
             self.is_optional = d.get("is_optional", False)
+            self.parent_id = d.get("parent_id")
     return TaskLike(task_dict)
 
 
@@ -375,14 +491,124 @@ def get_ready_tasks(state: Dict[str, Any], strict_dependencies: bool = True) -> 
     return ready
 
 
+def get_dispatchable_units_from_state(
+    state: Dict[str, Any],
+    strict_dependencies: bool = True
+) -> List[Dict[str, Any]]:
+    """
+    Get dispatch units ready for execution (no unmet dependencies).
+
+    Dispatch units are:
+    - Parent tasks (have subtasks), OR
+    - Standalone tasks (no parent, no subtasks)
+
+    Leaf tasks with parents are excluded.
+
+    Args:
+        state: The AGENT_STATE dictionary
+        strict_dependencies: If True (default), only 'completed' status satisfies
+                             dependencies. If False, includes review states.
+
+    Returns:
+        List of dispatchable task dictionaries ready to execute.
+
+    Requirements: 1.1, 1.2, 1.3, 4.1, 4.3, 4.4, 13.3, 13.4
+    """
+    completed = get_completed_task_ids(state, strict=strict_dependencies)
+
+    # Build task map for dependency expansion
+    task_like_map = {}
+    for task_dict in state.get("tasks", []):
+        task_like = _dict_to_task_like(task_dict)
+        task_like_map[task_like.task_id] = task_like
+
+    dispatchable = get_dispatchable_units(list(task_like_map.values()), completed)
+    dispatchable_ids = {t.task_id for t in dispatchable}
+
+    ready_units = []
+    for task_dict in state.get("tasks", []):
+        task_id = task_dict.get("task_id")
+        if task_id not in dispatchable_ids:
+            continue
+        # Skip optional tasks
+        if task_dict.get("is_optional", False):
+            continue
+        # Ensure task is not_started (guard against string status mismatch)
+        if task_dict.get("status") != "not_started":
+            continue
+        ready_units.append(task_dict)
+
+    return ready_units
+
+
+def allocate_windows(
+    dispatch_units: List[Dict[str, Any]],
+    max_windows: int = 9,
+    existing_mapping: Optional[Dict[str, str]] = None
+) -> Dict[str, str]:
+    """
+    Allocate tmux windows for dispatch units.
+
+    Returns mapping of dispatch_unit_id -> window_name.
+    Each dispatch unit gets exactly one window.
+
+    Requirements: 6.1, 6.3
+    """
+    window_mapping: Dict[str, str] = {}
+    existing_mapping = existing_mapping or {}
+
+    for unit in dispatch_units:
+        task_id = unit.get("task_id", "")
+        if not task_id or task_id in window_mapping:
+            continue
+        if len(window_mapping) >= max_windows:
+            break
+        window_name = existing_mapping.get(task_id) or f"task-{task_id}"
+        window_mapping[task_id] = window_name
+
+    return window_mapping
+
+
+def apply_window_allocation(
+    state: Dict[str, Any],
+    dispatch_units: List[Dict[str, Any]],
+    max_windows: int = 9
+) -> Dict[str, str]:
+    """
+    Ensure dispatch units have target_window assigned.
+
+    Uses existing state window_mapping when available, otherwise assigns
+    task-{task_id}. Does NOT assign windows for non-dispatch units.
+    """
+    existing_mapping = state.get("window_mapping", {}) if state else {}
+    window_mapping = allocate_windows(
+        dispatch_units,
+        max_windows=max_windows,
+        existing_mapping=existing_mapping
+    )
+
+    for task in dispatch_units:
+        task_id = task.get("task_id", "")
+        if not task_id:
+            continue
+        if not task.get("target_window") and task_id in window_mapping:
+            task["target_window"] = window_mapping[task_id]
+
+    return window_mapping
+
+
 def find_missing_dispatch_fields(tasks: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     """
     Identify tasks missing required dispatch fields.
-    
+
     Codex must set owner_agent and target_window before dispatch.
     """
     missing: Dict[str, List[str]] = {}
     for task in tasks:
+        # Only enforce dispatch fields for dispatch units
+        task_like = _dict_to_task_like(task)
+        if not is_dispatch_unit(task_like):
+            continue
         fields = []
         if not task.get("owner_agent"):
             fields.append("owner_agent")
@@ -393,11 +619,52 @@ def find_missing_dispatch_fields(tasks: List[Dict[str, Any]]) -> Dict[str, List[
     return missing
 
 
-def build_task_content(task: Dict[str, Any], spec_path: str) -> str:
+def build_task_content(
+    task: Dict[str, Any],
+    spec_path: str,
+    all_tasks: Optional[List[Dict[str, Any]]] = None
+) -> str:
     """
     Build task content/prompt for the worker agent.
     
-    Includes task description and references to spec files.
+    Supports two dispatch modes:
+    1. Dispatch Unit Mode (parent task with subtasks): Generates a comprehensive prompt
+       with parent task overview, ordered subtask list, and sequential execution instructions.
+    2. Standalone Mode (leaf task or no subtasks): Generates a simple task prompt.
+    
+    Requirements: 2.1, 2.2, 5.3
+    
+    Args:
+        task: Task dictionary with task_id, description, subtasks, details, etc.
+        spec_path: Path to spec directory containing requirements.md and design.md
+        all_tasks: Optional list of all tasks for looking up subtask details.
+                   Required for dispatch unit mode with subtasks.
+    
+    Returns:
+        Formatted task content/prompt string for the worker agent.
+    """
+    subtask_ids = task.get("subtasks", [])
+    
+    # Check if this is a dispatch unit with subtasks (parent task dispatch)
+    if subtask_ids and all_tasks:
+        return _build_dispatch_unit_content(task, spec_path, all_tasks)
+    
+    # Standalone task or leaf task - use simple format
+    return _build_standalone_task_content(task, spec_path)
+
+
+def _build_standalone_task_content(task: Dict[str, Any], spec_path: str) -> str:
+    """
+    Build task content for a standalone task (no subtasks).
+    
+    This is the original format for backward compatibility.
+    
+    Args:
+        task: Task dictionary
+        spec_path: Path to spec directory
+        
+    Returns:
+        Formatted task content string
     """
     lines = [
         f"Task: {task['description']}",
@@ -422,18 +689,154 @@ def build_task_content(task: Dict[str, Any], spec_path: str) -> str:
     return "\n".join(lines)
 
 
+def _build_dispatch_unit_content(
+    task: Dict[str, Any],
+    spec_path: str,
+    all_tasks: List[Dict[str, Any]]
+) -> str:
+    """
+    Build task content for a dispatch unit (parent task with subtasks).
+    
+    Generates a comprehensive prompt with:
+    - Parent task overview
+    - Ordered subtask list with step numbers
+    - Instructions for sequential execution
+    
+    Requirements: 2.1, 2.2
+    
+    Args:
+        task: Parent task dictionary with subtasks list
+        spec_path: Path to spec directory
+        all_tasks: List of all tasks for looking up subtask details
+        
+    Returns:
+        Formatted dispatch unit content string
+    """
+    # Build task map for subtask lookup
+    task_map = {t["task_id"]: t for t in all_tasks}
+    
+    # Get subtask IDs and sort them for consistent ordering
+    subtask_ids = sorted(task.get("subtasks", []), key=_task_id_sort_key)
+    
+    lines = [
+        f"# Task Group: {task['task_id']}",
+        "",
+        "## Overview",
+        task['description'],
+        "",
+    ]
+    
+    # Add parent task details if available
+    parent_details = task.get("details", [])
+    if parent_details:
+        lines.append("### Context")
+        for detail in parent_details:
+            lines.append(f"- {detail}")
+        lines.append("")
+    
+    # Add subtasks section with step numbers
+    lines.append("## Subtasks (Execute in Order)")
+    lines.append("")
+
+    for step_num, subtask_id in enumerate(subtask_ids, start=1):
+        subtask = task_map.get(subtask_id, {})
+        subtask_desc = subtask.get("description", f"Subtask {subtask_id}")      
+        is_optional = subtask.get("is_optional", False)
+        subtask_status = subtask.get("status", "not_started")
+        
+        # Format step header
+        optional_marker = " (Optional)" if is_optional else ""
+        lines.append(f"### Step {step_num}: {subtask_id} - {subtask_desc}{optional_marker}")
+        lines.append("")
+        
+        # Add subtask details
+        subtask_details = subtask.get("details", [])
+        if subtask_details:
+            for detail in subtask_details:
+                lines.append(f"- {detail}")
+            lines.append("")
+        else:
+            lines.append("(No additional details)")
+            lines.append("")
+
+        lines.append(f"Status: {subtask_status}")
+        lines.append("")
+
+    # Resume guidance (skip already completed subtasks)
+    completed_subtasks = [
+        sid for sid in subtask_ids
+        if task_map.get(sid, {}).get("status") == "completed"
+    ]
+    resume_subtask_id = None
+    for sid in subtask_ids:
+        status = task_map.get(sid, {}).get("status", "not_started")
+        if status != "completed":
+            resume_subtask_id = sid
+            break
+
+    if completed_subtasks or resume_subtask_id is not None:
+        lines.append("## Resume Guidance")
+        if completed_subtasks:
+            lines.append(f"- Completed subtasks: {', '.join(completed_subtasks)}")
+        if resume_subtask_id is not None:
+            resume_step = subtask_ids.index(resume_subtask_id) + 1
+            lines.append(f"- Resume from Step {resume_step}: {resume_subtask_id}")
+            lines.append("- Skip already completed subtasks.")
+        else:
+            lines.append("- All subtasks are completed. Only proceed if rework is required.")
+        lines.append("")
+    
+    # Add reference documents section
+    lines.append("## Reference Documents")
+    lines.append(f"- Requirements: {spec_path}/requirements.md")
+    lines.append(f"- Design: {spec_path}/design.md")
+    lines.append("")
+    
+    # Add execution instructions
+    lines.append("## Instructions")
+    instructions = [
+        "Execute each subtask in order (Step 1, Step 2, etc.)",
+        "After completing each subtask, report its status",
+        "Maintain context from previous subtasks within this task group",
+        "If a subtask fails, stop and report the failure - do not proceed to subsequent subtasks",
+        "If resuming after a blocked subtask, start from the first incomplete subtask and do not redo completed work",
+    ]
+    if any(task_map.get(sid, {}).get("is_optional", False) for sid in subtask_ids):
+        instructions.append("Optional subtasks may be skipped if not critical to the task group")
+    for idx, instruction in enumerate(instructions, start=1):
+        lines.append(f"{idx}. {instruction}")
+    lines.append("")
+    
+    return "\n".join(lines)
+
+
 def build_task_configs(
     tasks: List[Dict[str, Any]],
     spec_path: str,
-    workdir: str = "."
+    workdir: str = ".",
+    all_tasks: Optional[List[Dict[str, Any]]] = None
 ) -> List[TaskConfig]:
     """
     Build task configurations for codeagent-wrapper.
     
-    Requirement 1.3, 1.4: Build task config for dispatch.
+    Requirement 1.3, 1.4, 2.1, 2.2, 5.3: Build task config for dispatch.
     Expects Codex-provided owner_agent and target_window on each task.
+    
+    Args:
+        tasks: List of tasks to build configs for
+        spec_path: Path to spec directory
+        workdir: Working directory for tasks
+        all_tasks: Optional list of all tasks for dispatch unit mode.
+                   If provided, enables parent task dispatch with subtask details.
+                   If None, falls back to standalone task mode.
+    
+    Returns:
+        List of TaskConfig objects ready for codeagent-wrapper
     """
     configs = []
+    
+    # Use all_tasks for subtask lookup, or fall back to tasks list
+    task_lookup = all_tasks if all_tasks is not None else tasks
     
     for task in tasks:
         owner_agent = task.get("owner_agent")
@@ -446,13 +849,19 @@ def build_task_configs(
         if not target_window:
             raise ValueError(f"Task {task.get('task_id', 'unknown')} missing target_window")
         
+        # Determine if this is a dispatch unit (parent task with subtasks)
+        subtask_ids = task.get("subtasks", [])
+        is_dispatch_unit = bool(subtask_ids)
+        
         config = TaskConfig(
             task_id=task["task_id"],
             backend=backend,
             workdir=workdir,
-            content=build_task_content(task, spec_path),
+            content=build_task_content(task, spec_path, task_lookup),
             dependencies=task.get("dependencies", []),
             target_window=target_window,
+            subtasks=sorted(subtask_ids, key=_task_id_sort_key) if subtask_ids else [],
+            is_dispatch_unit=is_dispatch_unit,
         )
         configs.append(config)
     
@@ -568,6 +977,36 @@ def rollback_batch_tasks(state: Dict[str, Any], task_ids: List[str]) -> None:
                 task.pop(field, None)
 
 
+def handle_partial_completion(
+    state: Dict[str, Any],
+    dispatch_unit_id: str,
+    completed_subtasks: List[str],
+    failed_subtask: str,
+    error: str
+) -> None:
+    """Handle partial completion when a subtask fails."""
+    task_map = {t["task_id"]: t for t in state.get("tasks", [])}
+
+    # Mark completed subtasks
+    for sid in completed_subtasks:
+        if sid in task_map:
+            task_map[sid]["status"] = "completed"
+
+    # Mark failed subtask
+    if failed_subtask and failed_subtask in task_map:
+        task_map[failed_subtask]["status"] = "blocked"
+        if error:
+            task_map[failed_subtask]["blocked_reason"] = error
+
+    # Mark parent as blocked
+    if dispatch_unit_id in task_map:
+        task_map[dispatch_unit_id]["status"] = "blocked"
+        if failed_subtask:
+            task_map[dispatch_unit_id]["blocked_by"] = failed_subtask
+        if error:
+            task_map[dispatch_unit_id]["blocked_reason"] = error
+
+
 def process_execution_report(
     state: Dict[str, Any],
     report: ExecutionReport
@@ -577,29 +1016,52 @@ def process_execution_report(
     
     Requirement 9.4: Process Execution Report
     """
+    task_map = {t["task_id"]: t for t in state.get("tasks", [])}
+
     for result in report.task_results:
         task_id = result.get("task_id")
         if not task_id:
             continue
-        
+
         # Find and update task
-        for task in state.get("tasks", []):
-            if task["task_id"] == task_id:
-                # Update status based on result
-                if result.get("status") == "completed" or result.get("exit_code", 1) == 0:
-                    task["status"] = "pending_review"
-                elif result.get("status") == "blocked":
-                    task["status"] = "blocked"
-                
-                # Copy result fields
-                for field in ["exit_code", "output", "error", "files_changed", 
-                             "coverage", "coverage_num", "tests_passed", "tests_failed",
-                             "window_id", "pane_id"]:
-                    if field in result:
-                        task[field] = result[field]
-                
-                task["completed_at"] = datetime.utcnow().isoformat() + "Z"
-                break
+        task = task_map.get(task_id)
+        if not task:
+            continue
+
+        completed_subtasks = result.get("completed_subtasks", []) or []
+        failed_subtask = result.get("failed_subtask") or result.get("blocked_by")
+
+        if failed_subtask:
+            # Handle partial completion (subtask failure)
+            handle_partial_completion(
+                state,
+                dispatch_unit_id=task_id,
+                completed_subtasks=completed_subtasks,
+                failed_subtask=failed_subtask,
+                error=result.get("error", "")
+            )
+        else:
+            # Update status based on result
+            if result.get("status") == "completed" or result.get("exit_code", 1) == 0:
+                task["status"] = "pending_review"
+                # If this is a dispatch unit, mark untouched subtasks as pending_review
+                subtask_ids = task.get("subtasks", [])
+                if subtask_ids:
+                    for sid in subtask_ids:
+                        subtask = task_map.get(sid)
+                        if subtask and subtask.get("status") == "not_started":
+                            subtask["status"] = "pending_review"
+            elif result.get("status") == "blocked":
+                task["status"] = "blocked"
+
+        # Copy result fields
+        for field in ["exit_code", "output", "error", "files_changed",
+                     "coverage", "coverage_num", "tests_passed", "tests_failed",
+                     "window_id", "pane_id"]:
+            if field in result:
+                task[field] = result[field]
+
+        task["completed_at"] = datetime.now(timezone.utc).isoformat()
 
 
 def dispatch_batch(
@@ -708,8 +1170,8 @@ def dispatch_batch(
         if not dry_run:
             save_agent_state(state_file, state)
     
-    # Get ready tasks (not_started leaf tasks with satisfied dependencies)
-    ready_tasks = get_ready_tasks(state)
+    # Get ready dispatch units (parent or standalone tasks with satisfied dependencies)
+    ready_tasks = get_dispatchable_units_from_state(state)
     
     if not ready_tasks:
         # No new tasks ready, but we may have dispatched fix tasks
@@ -757,6 +1219,9 @@ def dispatch_batch(
             tasks_dispatched=0
         )
 
+    # Assign target windows for dispatch units if missing (Req 6.1)
+    apply_window_allocation(state, ready_tasks)
+
     # Validate Codex-provided dispatch fields before proceeding
     missing_fields = find_missing_dispatch_fields(ready_tasks)
     if missing_fields:
@@ -780,6 +1245,9 @@ def dispatch_batch(
     spec_path = state.get("spec_path", ".")
     session_name = state.get("session_name", "orchestration")
     
+    # Get all tasks from state for dispatch unit mode (subtask lookup)
+    all_tasks = state.get("tasks", [])
+    
     # Dispatch batches sequentially (Req 2.3, 2.4)
     for batch_idx, batch in enumerate(batches):
         batch_task_ids = [t["task_id"] for t in batch]
@@ -787,8 +1255,8 @@ def dispatch_batch(
         if len(batches) > 1:
             logger.info(f"Dispatching batch {batch_idx + 1}/{len(batches)} with {len(batch)} tasks: {batch_task_ids}")
         
-        # Build task configs for this batch
-        configs = build_task_configs(batch, spec_path, workdir)
+        # Build task configs for this batch (pass all_tasks for dispatch unit mode)
+        configs = build_task_configs(batch, spec_path, workdir, all_tasks)
         
         # Invoke codeagent-wrapper for this batch
         try:
