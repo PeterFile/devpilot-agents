@@ -67,7 +67,7 @@ func (r *tmuxTaskRunner) prepareTarget(task TaskSpec) (tmuxTarget, error) {
 		var target string
 		var paneID string
 		if created {
-			target = fmt.Sprintf("%s:%s", r.manager.config.SessionName, windowName)
+			target = fmt.Sprintf("%s:%s", r.manager.SessionTarget(), windowName)
 		} else {
 			paneID, err = r.manager.CreatePane(windowName)
 			if err != nil {
@@ -92,7 +92,7 @@ func (r *tmuxTaskRunner) prepareTarget(task TaskSpec) (tmuxTarget, error) {
 		r.mu.Lock()
 		r.windowByTask[taskID] = taskID
 		r.mu.Unlock()
-		target := fmt.Sprintf("%s:%s", r.manager.config.SessionName, taskID)
+		target := fmt.Sprintf("%s:%s", r.manager.SessionTarget(), taskID)
 		return tmuxTarget{
 			windowName: taskID,
 			target:     target,

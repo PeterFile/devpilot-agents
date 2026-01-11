@@ -311,6 +311,7 @@ func run() (exitCode int) {
 			}
 
 			var results []TaskResult
+			tmuxSessionTarget := ""
 			if tmuxSession != "" {
 				tmuxMgr := NewTmuxManager(TmuxConfig{
 					SessionName: tmuxSession,
@@ -321,6 +322,7 @@ func run() (exitCode int) {
 					fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 					return 1
 				}
+				tmuxSessionTarget = tmuxMgr.SessionTarget()
 				var stateWriter *StateWriter
 				if strings.TrimSpace(stateFile) != "" {
 					stateWriter = NewStateWriter(stateFile)
@@ -369,8 +371,8 @@ func run() (exitCode int) {
 				}
 			}
 
-			if tmuxAttach && tmuxSession != "" {
-				_ = attachTmuxSession(tmuxSession)
+			if tmuxAttach && tmuxSessionTarget != "" {
+				_ = attachTmuxSession(tmuxSessionTarget)
 			}
 
 			return exitCode

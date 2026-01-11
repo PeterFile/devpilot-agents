@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ type TmuxManager struct {
 	windowNames     map[string]bool
 	windowCount     int
 	windowCacheInit bool
+	sessionID       string
 }
 
 // Test hooks for tmux command execution.
@@ -72,7 +74,10 @@ func (tm *TmuxManager) SessionExists() bool {
 	if tm == nil {
 		return false
 	}
-	return tmuxHasSessionFn(tm.config.SessionName)
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	_, exists, _ := tm.resolveSessionTargetLocked()
+	return exists
 }
 
 // EnsureSession creates the tmux session with a main window if needed.
@@ -85,24 +90,43 @@ func (tm *TmuxManager) EnsureSession() error {
 	}
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	if tm.SessionExists() {
+	target, exists, err := tm.resolveSessionTargetLocked()
+	if err != nil {
+		return err
+	}
+	if exists {
+		tm.windowCacheInit = false
+		if err := tm.ensureSessionOptionsLocked(target); err != nil {
+			return err
+		}
 		return nil
 	}
-	if _, err := tmuxCommandFn(
+	output, err := tmuxCommandFn(
 		"new-session",
 		"-d",
+		"-P",
+		"-F", "#{session_id}\t#{window_id}",
 		"-s", tm.config.SessionName,
 		"-n", tm.config.MainWindow,
-	); err != nil {
-		return err
-	}
-	if err := waitForSessionReady(tm.config.SessionName); err != nil {
-		return err
-	}
-	_, _ = tmuxCommandFn(
-		"split-window",
-		"-t", fmt.Sprintf("%s:%s", tm.config.SessionName, tm.config.MainWindow),
 	)
+	if err != nil {
+		return err
+	}
+	sessionID, mainWindowID := parseNewSessionOutput(output)
+	if sessionID != "" {
+		tm.sessionID = sessionID
+	}
+	target = tm.sessionTargetLocked()
+	if err := waitForSessionReady(target); err != nil {
+		return err
+	}
+	tm.windowCacheInit = false
+	_ = tm.ensureSessionOptionsLocked(target)
+	splitTarget := mainWindowID
+	if strings.TrimSpace(splitTarget) == "" {
+		splitTarget = fmt.Sprintf("%s:%s", target, tm.config.MainWindow)
+	}
+	_, _ = tmuxCommandFn("split-window", "-t", splitTarget)
 	return nil
 }
 
@@ -119,7 +143,7 @@ func (tm *TmuxManager) CreateWindow(taskID string) (string, error) {
 	defer tm.mu.Unlock()
 	output, err := tmuxCommandFn(
 		"new-window",
-		"-t", tm.config.SessionName,
+		"-t", tm.sessionTargetLocked(),
 		"-n", taskID,
 		"-P", "-F", "#{window_id}",
 	)
@@ -144,7 +168,7 @@ func (tm *TmuxManager) CreatePane(targetWindow string) (string, error) {
 	}
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	target := fmt.Sprintf("%s:%s", tm.config.SessionName, targetWindow)
+	target := fmt.Sprintf("%s:%s", tm.sessionTargetLocked(), targetWindow)
 	output, err := tmuxCommandFn(
 		"split-window",
 		"-t", target,
@@ -176,15 +200,15 @@ func (tm *TmuxManager) SendCommand(target string, command string) error {
 	return err
 }
 
-func waitForSessionReady(sessionName string) error {
+func waitForSessionReady(target string) error {
 	for i := 0; i < sessionReadyChecks; i++ {
-		if tmuxHasSessionFn(sessionName) {
+		if tmuxHasSessionFn(target) {
 			time.Sleep(sessionReadyExtraWait)
 			return nil
 		}
 		time.Sleep(sessionReadyDelay)
 	}
-	return fmt.Errorf("session %s not ready after creation", sessionName)
+	return fmt.Errorf("session %s not ready after creation", target)
 }
 
 // SetupTaskPanes creates windows or panes for a batch of tasks.
@@ -235,6 +259,16 @@ func (tm *TmuxManager) SetupTaskPanes(tasks []TaskSpec) (map[string]string, erro
 	return taskToWindow, nil
 }
 
+// SessionTarget returns the tmux target identifier for this manager.
+func (tm *TmuxManager) SessionTarget() string {
+	if tm == nil {
+		return ""
+	}
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	return tm.sessionTargetLocked()
+}
+
 // GetOrCreateWindow returns the window name and whether it was created.
 func (tm *TmuxManager) GetOrCreateWindow(windowName string) (string, bool, error) {
 	if tm == nil {
@@ -261,7 +295,7 @@ func (tm *TmuxManager) GetOrCreateWindow(windowName string) (string, bool, error
 	}
 	if _, err := tmuxCommandFn(
 		"new-window",
-		"-t", tm.config.SessionName,
+		"-t", tm.sessionTargetLocked(),
 		"-n", windowName,
 		"-P", "-F", "#{window_id}",
 	); err != nil {
@@ -278,7 +312,7 @@ func (tm *TmuxManager) ensureWindowCacheLocked() error {
 	}
 	output, err := tmuxCommandFn(
 		"list-windows",
-		"-t", tm.config.SessionName,
+		"-t", tm.sessionTargetLocked(),
 		"-F", "#{window_name}",
 	)
 	if err != nil {
@@ -297,5 +331,114 @@ func (tm *TmuxManager) ensureWindowCacheLocked() error {
 		}
 	}
 	tm.windowCacheInit = true
+	return nil
+}
+
+func (tm *TmuxManager) sessionTargetLocked() string {
+	if strings.TrimSpace(tm.sessionID) != "" {
+		return tm.sessionID
+	}
+	return tm.config.SessionName
+}
+
+func (tm *TmuxManager) resolveSessionTargetLocked() (string, bool, error) {
+	if tm.sessionID != "" {
+		if tmuxHasSessionFn(tm.sessionID) {
+			return tm.sessionID, true, nil
+		}
+		tm.sessionID = ""
+	}
+	name := strings.TrimSpace(tm.config.SessionName)
+	if name == "" {
+		return "", false, fmt.Errorf("tmux session name is required")
+	}
+	if tmuxHasSessionFn(name) {
+		if sessionID := tm.lookupSessionIDLocked(name); sessionID != "" {
+			tm.sessionID = sessionID
+			return sessionID, true, nil
+		}
+		return name, true, nil
+	}
+	sessionID, err := tm.findSessionIDByLabelLocked(name)
+	if err != nil {
+		return "", false, err
+	}
+	if sessionID != "" {
+		tm.sessionID = sessionID
+		return sessionID, true, nil
+	}
+	return "", false, nil
+}
+
+func (tm *TmuxManager) lookupSessionIDLocked(name string) string {
+	output, err := tmuxCommandFn("display-message", "-p", "-t", name, "#{session_id}")
+	if err == nil {
+		if id := strings.TrimSpace(output); id != "" {
+			return id
+		}
+	}
+	sessionID, _ := tm.findSessionIDByLabelLocked(name)
+	return sessionID
+}
+
+func (tm *TmuxManager) findSessionIDByLabelLocked(name string) (string, error) {
+	output, err := tmuxCommandFn("list-sessions", "-F", "#{session_id}\t#{session_name}")
+	if err != nil {
+		return "", nil
+	}
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		sessionID := strings.TrimSpace(parts[0])
+		sessionName := strings.TrimSpace(parts[1])
+		if sessionName == name {
+			return sessionID, nil
+		}
+		if label, ok := sessionLabel(sessionName); ok && label == name {
+			return sessionID, nil
+		}
+	}
+	return "", nil
+}
+
+func sessionLabel(name string) (string, bool) {
+	sep := strings.IndexByte(name, '-')
+	if sep <= 0 {
+		return "", false
+	}
+	if _, err := strconv.Atoi(name[:sep]); err != nil {
+		return "", false
+	}
+	return name[sep+1:], true
+}
+
+func parseNewSessionOutput(output string) (string, string) {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(trimmed, "\t", 2)
+	if len(parts) == 1 {
+		return strings.TrimSpace(parts[0]), ""
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+}
+
+func (tm *TmuxManager) ensureSessionOptionsLocked(target string) error {
+	if strings.TrimSpace(target) == "" {
+		return nil
+	}
+	if _, err := tmuxCommandFn("set-option", "-t", target, "allow-rename", "off"); err != nil {
+		return err
+	}
+	if _, err := tmuxCommandFn("set-window-option", "-t", target, "automatic-rename", "off"); err != nil {
+		return err
+	}
 	return nil
 }

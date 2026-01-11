@@ -56,17 +56,17 @@ func runTmuxMode(cfg *Config, taskText string, useStdin bool) int {
 	}
 
 	if cfg.TmuxAttach {
-		_ = attachTmuxSession(cfg.TmuxSession)
+		_ = attachTmuxSession(tmuxMgr.SessionTarget())
 	}
 
 	return result.ExitCode
 }
 
-func attachTmuxSession(session string) error {
-	if strings.TrimSpace(session) == "" {
-		return fmt.Errorf("tmux session name is required")
+func attachTmuxSession(target string) error {
+	if strings.TrimSpace(target) == "" {
+		return fmt.Errorf("tmux session target is required")
 	}
-	return execCommand("tmux", "attach", "-t", session)
+	return execCommand("tmux", "attach", "-t", target)
 }
 
 func generateTaskID() string {
