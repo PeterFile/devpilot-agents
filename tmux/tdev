@@ -1,0 +1,53 @@
+#!/bin/bash
+# Tmux dev environment layout script
+# Layout:
+#   Window 1: Gemini (left 60%) | terminal (top-right) | lazygit (bottom-right)
+#   Window 2: dev server
+#   Window 3: misc
+
+SESSION_NAME="${1:-dev}"
+
+# Check if session exists
+tmux has-session -t "$SESSION_NAME" 2>/dev/null
+
+if [ $? -eq 0 ]; then
+    echo "Session '$SESSION_NAME' already exists. Attaching..."
+    tmux attach -t "$SESSION_NAME"
+    exit 0
+fi
+
+# Create new session with first window named 'editor'
+tmux new-session -d -s "$SESSION_NAME" -n editor
+
+# Window 1 Layout:
+# ┌─────────────────┬───────────────┐
+# │                 │   terminal    │
+# │     Gemini      ├───────────────┤
+# │     (60%)       │   lazygit     │
+# └─────────────────┴───────────────┘
+
+# Split right 40%
+RIGHT_PANE=$(tmux split-window -h -t "$SESSION_NAME:editor" -p 40 -P -F '#{pane_id}')
+
+# Split the right pane vertically 50%
+LAZYGIT_PANE=$(tmux split-window -v -t "$RIGHT_PANE" -p 50 -P -F '#{pane_id}')
+
+# Get left pane ID
+LEFT_PANE=$(tmux list-panes -t "$SESSION_NAME:editor" -F '#{pane_id}' | grep -v "$RIGHT_PANE" | grep -v "$LAZYGIT_PANE")
+
+# Start apps
+tmux send-keys -t "$LEFT_PANE" 'gemini' Enter
+tmux send-keys -t "$LAZYGIT_PANE" 'lazygit' Enter
+
+# Window 2: dev server
+tmux new-window -t "$SESSION_NAME" -n server
+
+# Window 3: misc
+tmux new-window -t "$SESSION_NAME" -n misc
+
+# Go back to first window, focus on Gemini pane
+tmux select-window -t "$SESSION_NAME:editor"
+tmux select-pane -t "$LEFT_PANE"
+
+# Attach to session
+tmux attach -t "$SESSION_NAME"
