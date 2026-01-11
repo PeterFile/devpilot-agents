@@ -3,7 +3,7 @@
 Integration Tests for Full Dispatch Chain
 
 Tests the integration of:
-- Parent task filtering (only leaf tasks dispatched)
+- Parent task dispatch (parent tasks dispatched as units)
 - Task field preservation (subtasks, parent_id, writes, reads)
 - Fix loop integration in dispatch
 
@@ -26,7 +26,7 @@ from spec_parser import parse_tasks, TaskStatus
 from init_orchestration import initialize_orchestration, update_parent_statuses
 from dispatch_batch import (
     dispatch_batch,
-    get_ready_tasks,
+    get_dispatchable_units_from_state,
     load_agent_state,
     save_agent_state,
     _dict_to_task_like,
@@ -137,16 +137,16 @@ def apply_codex_assignments(state: Dict[str, Any]) -> None:
         owner_agent = task.get("owner_agent") or TYPE_TO_AGENT.get(task_type, "kiro-cli")
         task["owner_agent"] = owner_agent
         task.setdefault("criticality", "standard")
-        task.setdefault("target_window", owner_agent)
+        task.setdefault("target_window", f"task-{task.get('task_id')}")
 
 
 class TestParentTaskFiltering:
     """Tests for parent task filtering (Req 1.1, 1.2)."""
     
-    def test_parent_tasks_never_dispatched(self):
+    def test_parent_tasks_dispatched_as_units(self):
         """
-        Test that parent tasks are never included in ready tasks.
-        
+        Test that parent tasks are dispatched as units.
+
         Requirements: 1.1, 1.2
         """
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -164,24 +164,25 @@ class TestParentTaskFiltering:
             
             state = load_agent_state(result.state_file)
             
-            # Get ready tasks
-            ready_tasks = get_ready_tasks(state)
+            # Get ready dispatch units
+            ready_tasks = get_dispatchable_units_from_state(state)
             ready_ids = [t["task_id"] for t in ready_tasks]
-            
-            # Parent task "1" should NOT be in ready tasks
-            assert "1" not in ready_ids, \
-                "Parent task '1' should not be dispatched (has subtasks)"
-            
-            # Leaf tasks should be ready
-            # Task 1.1 and 1.2 are subtasks of 1, should be ready
-            # Task 2 is independent leaf, should be ready
-            assert "1.1" in ready_ids or "1.2" in ready_ids or "2" in ready_ids, \
-                "At least one leaf task should be ready"
+
+            # Parent task "1" should be dispatched as a unit
+            assert "1" in ready_ids, \
+                "Parent task '1' should be dispatched as a unit"
+
+            # Subtasks should NOT be dispatched independently
+            assert "1.1" not in ready_ids and "1.2" not in ready_ids, \
+                "Subtasks should not be dispatched independently"
+
+            # Standalone task "2" should be ready
+            assert "2" in ready_ids, "Standalone task '2' should be ready"
     
-    def test_only_leaf_tasks_in_ready_list(self):
+    def test_only_dispatch_units_in_ready_list(self):
         """
-        Test that only leaf tasks (no subtasks) appear in ready list.
-        
+        Test that only dispatch units appear in ready list.
+
         Requirements: 1.1, 1.2
         """
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -198,13 +199,14 @@ class TestParentTaskFiltering:
             assert result.success
             
             state = load_agent_state(result.state_file)
-            ready_tasks = get_ready_tasks(state)
-            
-            # Verify all ready tasks are leaf tasks (no subtasks)
+            ready_tasks = get_dispatchable_units_from_state(state)
+
+            # Verify all ready tasks are dispatch units (parent or standalone)
             for task in ready_tasks:
                 subtasks = task.get("subtasks", [])
-                assert len(subtasks) == 0, \
-                    f"Task {task['task_id']} has subtasks {subtasks}, should not be in ready list"
+                parent_id = task.get("parent_id")
+                assert subtasks or parent_id is None, \
+                    f"Task {task['task_id']} should be a dispatch unit"
     
     def test_dependency_on_parent_expands_to_subtasks(self):
         """
@@ -229,7 +231,7 @@ class TestParentTaskFiltering:
             
             # Task 3 depends on task 1 (parent)
             # It should NOT be ready until all subtasks of 1 are complete
-            ready_tasks = get_ready_tasks(state)
+            ready_tasks = get_dispatchable_units_from_state(state)
             ready_ids = [t["task_id"] for t in ready_tasks]
             
             assert "3" not in ready_ids, \
@@ -244,7 +246,7 @@ class TestParentTaskFiltering:
             update_parent_statuses(state)
             
             # Now task 3 should be ready
-            ready_tasks = get_ready_tasks(state)
+            ready_tasks = get_dispatchable_units_from_state(state)
             ready_ids = [t["task_id"] for t in ready_tasks]
             
             assert "3" in ready_ids, \
@@ -534,11 +536,11 @@ class TestDispatchChainIntegration:
             assert parent is not None
             assert len(parent.get("subtasks", [])) == 2
             
-            # Get ready tasks - should only be leaf tasks
-            ready = get_ready_tasks(state)
+            # Get ready dispatch units
+            ready = get_dispatchable_units_from_state(state)
             for task in ready:
-                assert len(task.get("subtasks", [])) == 0, \
-                    f"Ready task {task['task_id']} should be a leaf task"
+                assert task.get("subtasks") or task.get("parent_id") is None, \
+                    f"Ready task {task['task_id']} should be a dispatch unit"
             
             apply_codex_assignments(state)
             save_agent_state(result.state_file, state)
@@ -566,7 +568,7 @@ class TestDispatchChainIntegration:
             assert parent["status"] == "completed"
             
             # Task 3 (depends on parent 1) should now be ready
-            ready = get_ready_tasks(state)
+            ready = get_dispatchable_units_from_state(state)
             ready_ids = [t["task_id"] for t in ready]
             assert "3" in ready_ids, \
                 "Task 3 should be ready after parent 1 is completed"

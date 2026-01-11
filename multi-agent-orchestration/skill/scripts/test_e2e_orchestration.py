@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from spec_parser import parse_tasks, validate_spec_directory, TaskStatus, TaskType
 from init_orchestration import initialize_orchestration
-from dispatch_batch import dispatch_batch, get_ready_tasks, build_task_configs, load_agent_state
+from dispatch_batch import dispatch_batch, get_dispatchable_units_from_state, build_task_configs, load_agent_state
 from sync_pulse import sync_pulse_files, parse_pulse, generate_pulse
 from fix_loop import (
     enter_fix_loop,
@@ -267,7 +267,7 @@ def apply_codex_assignments(state: Dict[str, Any]) -> None:
         owner_agent = task.get("owner_agent") or TYPE_TO_AGENT.get(task_type, "kiro-cli")
         task["owner_agent"] = owner_agent
         task.setdefault("criticality", "standard")
-        task.setdefault("target_window", owner_agent)
+        task.setdefault("target_window", f"task-{task.get('task_id')}")
 
 
 def apply_assignments_to_state_file(state_file: str) -> Dict[str, Any]:
@@ -416,8 +416,8 @@ class TestE2EOrchestration:
             for task in state["tasks"]:
                 assert task["status"] == "not_started"
     
-    def test_get_ready_tasks(self):
-        """Test getting ready tasks (no unmet dependencies)."""
+    def test_get_dispatchable_units(self):
+        """Test getting ready dispatch units (no unmet dependencies)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             spec_path = create_sample_spec_directory(tmpdir)
             output_dir = Path(tmpdir) / "output"
@@ -434,14 +434,16 @@ class TestE2EOrchestration:
             with open(result.state_file, encoding='utf-8') as f:
                 state = json.load(f)
             
-            ready_tasks = get_ready_tasks(state)
+            ready_tasks = get_dispatchable_units_from_state(state)
             
-            # Should have at least one ready task (tasks without dependencies)
+            # Should have at least one ready dispatch unit
             assert len(ready_tasks) > 0
-            
-            # Ready tasks should have no unmet dependencies
+
+            # Ready units should have no unmet dependencies
             completed_ids = set()  # Initially empty
             for task in ready_tasks:
+                # Dispatch units are parent or standalone
+                assert task.get("subtasks") or task.get("parent_id") is None
                 deps = task.get("dependencies", [])
                 for dep in deps:
                     assert dep in completed_ids, f"Task {task['task_id']} has unmet dependency {dep}"
@@ -465,7 +467,7 @@ class TestE2EOrchestration:
                 state = json.load(f)
             
             apply_codex_assignments(state)
-            ready_tasks = get_ready_tasks(state)
+            ready_tasks = get_dispatchable_units_from_state(state)
             configs = build_task_configs(ready_tasks, spec_path)
             
             assert len(configs) == len(ready_tasks)
@@ -586,9 +588,9 @@ class TestE2EOrchestration:
             
             initial_task_count = len(state["tasks"])
             
-            # Step 2: Get ready tasks
-            ready_tasks = get_ready_tasks(state)
-            assert len(ready_tasks) > 0, "Should have ready tasks"
+            # Step 2: Get ready dispatch units
+            ready_tasks = get_dispatchable_units_from_state(state)
+            assert len(ready_tasks) > 0, "Should have ready dispatch units"
             
             # Step 3: Dispatch (dry-run)
             apply_assignments_to_state_file(init_result.state_file)
@@ -715,8 +717,8 @@ class TestE2EOrchestration:
             with open(result.state_file, encoding='utf-8') as f:
                 state = json.load(f)
             
-            # Get ready tasks - only task 1 should be ready
-            ready = get_ready_tasks(state)
+            # Get ready dispatch units - only task 1 should be ready
+            ready = get_dispatchable_units_from_state(state)
             ready_ids = [t["task_id"] for t in ready]
             
             assert "1" in ready_ids, "Task 1 should be ready (no dependencies)"
@@ -1135,7 +1137,7 @@ def run_tests():
         ("Initialization Creates State File", test_instance.test_initialization_creates_state_file),
         ("Initialization Creates PULSE File", test_instance.test_initialization_creates_pulse_file),
         ("Initialization Task Entries", test_instance.test_initialization_task_entries),
-        ("Get Ready Tasks", test_instance.test_get_ready_tasks),
+        ("Get Dispatchable Units", test_instance.test_get_dispatchable_units),
         ("Build Task Configs", test_instance.test_build_task_configs),
         ("Dispatch Batch (Dry Run)", test_instance.test_dispatch_batch_dry_run),
         ("Sync PULSE Updates", test_instance.test_sync_pulse_updates),
