@@ -111,6 +111,30 @@
           "design.*system"
         ]
       }
+    },
+    "multi-agent-orchestrator": {
+      "type": "execution",
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": [
+          "orchestration",
+          "orchestrate",
+          "multi-agent",
+          "start orchestration",
+          "run orchestration",
+          "编排",
+          "多智能体",
+          "任务调度",
+          "协调执行"
+        ],
+        "intentPatterns": [
+          "(start|run|begin).*orchestration",
+          "orchestrat(e|ion).*spec",
+          "multi.?agent.*(workflow|execution)",
+          "(dispatch|coordinate).*tasks?"
+        ]
+      }
     }
   }
 }

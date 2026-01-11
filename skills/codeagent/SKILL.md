@@ -1,19 +1,20 @@
 ---
 name: codeagent
-description: Execute codeagent-wrapper for multi-backend AI code tasks. Supports Codex, Claude, and Gemini backends with file references (@syntax) and structured output.
+description: Execute codeagent-wrapper for multi-backend AI code tasks. Supports Kiro-CLI, Codex, Claude, and Gemini backends with file references (@syntax) and structured output.
 ---
 
 # Codeagent Wrapper Integration
 
 ## Overview
 
-Execute codeagent-wrapper commands with pluggable AI backends (Codex, Claude, Gemini). Supports file references via `@` syntax, parallel task execution with backend selection, and configurable security controls.
+Execute codeagent-wrapper commands with pluggable AI backends (Kiro-CLI, Codex, Claude, Gemini). Supports file references via `@` syntax, parallel task execution with backend selection, and configurable security controls.
 
 ## When to Use
 
 - Complex code analysis requiring deep understanding
 - Large-scale refactoring across multiple files
 - Automated code generation with backend selection
+- Multi-agent orchestration workflows (kiro-cli for code, gemini for UI, codex for review)
 
 ## Usage
 
@@ -41,17 +42,24 @@ codeagent-wrapper --backend gemini "simple task"
 
 | Backend | Command | Description | Best For |
 |---------|---------|-------------|----------|
-| codex | `--backend codex` | OpenAI Codex (default) | Code analysis, complex development |
+| kiro-cli | `--backend kiro-cli` | Kiro IDE CLI | Primary code implementation, MCP tool integration |
+| codex | `--backend codex` | OpenAI Codex (default) | Code review, complex analysis, orchestration |
 | claude | `--backend claude` | Anthropic Claude | Simple tasks, documentation, prompts |
-| gemini | `--backend gemini` | Google Gemini | UI/UX prototyping |
+| gemini | `--backend gemini` | Google Gemini | UI/UX development, frontend components |
 
 ### Backend Selection Guide
 
-**Codex** (default):
-- Deep code understanding and complex logic implementation
-- Large-scale refactoring with precise dependency tracking
-- Algorithm optimization and performance tuning
-- Example: "Analyze the call graph of @src/core and refactor the module dependency structure"
+**Kiro-CLI** (recommended for code implementation):
+- Primary agent for code implementation tasks
+- Full MCP (Model Context Protocol) tool integration
+- Best for feature development, bug fixes, and code modifications
+- Example: "Implement user authentication with JWT tokens in @src/auth"
+
+**Codex** (default, recommended for review/analysis):
+- Deep code understanding and complex logic analysis
+- Code review and quality assessment
+- Orchestration and coordination tasks
+- Example: "Review the implementation in @src/api for security issues and suggest improvements"
 
 **Claude**:
 - Quick feature implementation with clear requirements
@@ -59,22 +67,35 @@ codeagent-wrapper --backend gemini "simple task"
 - Professional prompt engineering (e.g., product requirements, design specs)
 - Example: "Generate a comprehensive README for @package.json with installation, usage, and API docs"
 
-**Gemini**:
+**Gemini** (recommended for UI):
 - UI component scaffolding and layout prototyping
 - Design system implementation with style consistency
 - Interactive element generation with accessibility support
+- Frontend development (React, Vue, HTML/CSS)
 - Example: "Create a responsive dashboard layout with sidebar navigation and data visualization cards"
 
+### Multi-Agent Orchestration Pattern
+
+For orchestrated workflows, use this backend assignment:
+
+| Task Type | Backend | Reason |
+|-----------|---------|--------|
+| Code Implementation | `kiro-cli` | MCP tools, full IDE capabilities |
+| UI/Frontend | `gemini` | Specialized for visual components |
+| Code Review | `codex` | Deep analysis, quality assessment |
+
 **Backend Switching**:
-- Start with Codex for analysis, switch to Claude for documentation, then Gemini for UI implementation
+- Use kiro-cli for code implementation, gemini for UI, codex for review
 - Use per-task backend selection in parallel mode to optimize for each task's strengths
 
 ## Parameters
 
 - `task` (required): Task description, supports `@file` references
 - `working_dir` (optional): Working directory (default: current)
-- `--backend` (optional): Select AI backend (codex/claude/gemini, default: codex)
+- `--backend` (optional): Select AI backend (kiro-cli/codex/claude/gemini, default: codex)
   - **Note**: Claude backend only adds `--dangerously-skip-permissions` when explicitly enabled
+- `--tmux-session` (optional): Enable tmux visualization mode for parallel execution
+- `--state-file` (optional): Path to AGENT_STATE.json for real-time status updates
 
 ## Return Format
 
@@ -129,29 +150,39 @@ EOF
 - **Summary (default)**: Structured report with changes, output, verification, and review summary.
 - **Full (`--full-output`)**: Complete task messages. Use only when debugging specific failures.
 
-**With per-task backend**:
+**With per-task backend (orchestration pattern)**:
 ```bash
-codeagent-wrapper --parallel <<'EOF'
+codeagent-wrapper --parallel --tmux-session orch-session --state-file AGENT_STATE.json <<'EOF'
 ---TASK---
 id: task1
-backend: codex
+backend: kiro-cli
 workdir: /path/to/dir
+target_window: backend
 ---CONTENT---
-analyze code structure
+Implement user authentication module
 ---TASK---
 id: task2
-backend: claude
-dependencies: task1
+backend: gemini
+workdir: /path/to/dir
+target_window: frontend
 ---CONTENT---
-design architecture based on analysis
+Create login form component with validation
 ---TASK---
 id: task3
-backend: gemini
-dependencies: task2
+backend: codex
+dependencies: task1, task2
+target_window: review
 ---CONTENT---
-generate implementation code
+Review implementation for security issues
 EOF
 ```
+
+**Task metadata fields**:
+- `id`: Unique task identifier (required)
+- `backend`: AI backend to use (kiro-cli/codex/claude/gemini)
+- `workdir`: Working directory for the task
+- `dependencies`: Comma-separated task IDs that must complete first
+- `target_window`: tmux window name for grouping related tasks
 
 **Concurrency Control**:
 Set `CODEAGENT_MAX_PARALLEL_WORKERS` to limit concurrent tasks (default: unlimited).
@@ -201,6 +232,27 @@ Bash tool parameters:
 
 ## Recent Updates
 
+- **Kiro-CLI backend**: Added support for Kiro IDE CLI as primary code implementation agent
+- **tmux integration**: `--tmux-session` flag for visual parallel execution
+- **State file support**: `--state-file` flag for AGENT_STATE.json real-time updates
 - Multi-backend support for all modes (workdir, resume, parallel)
 - Security controls with configurable permission checks
 - Concurrency limits with worker pool and fail-fast cancellation
+
+## Integration with Multi-Agent Orchestration
+
+This skill integrates with the `multi-agent-orchestrator` skill for full orchestration workflows:
+
+```
+multi-agent-orchestrator
+       │
+       │ dispatch_batch.py
+       ▼
+codeagent-wrapper --parallel --tmux-session <session> --state-file AGENT_STATE.json
+       │
+       ├── kiro-cli (code tasks)
+       ├── gemini (UI tasks)
+       └── codex (review tasks)
+```
+
+See `multi-agent-orchestrator` skill for complete orchestration workflow.
