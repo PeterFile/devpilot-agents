@@ -108,6 +108,30 @@
           "description": "Copy development commands documentation"
         }
       ]
+    },
+    "orchestration": {
+      "enabled": false,
+      "description": "Multi-agent orchestration with Codex/Gemini workers",
+      "operations": [
+        {
+          "type": "copy_file",
+          "source": "multi-agent-orchestration/prompts/orchestrate.md",
+          "target": "prompts/orchestrate.md",
+          "description": "Install /prompts:orchestrate command for Codex"
+        },
+        {
+          "type": "copy_dir",
+          "source": "multi-agent-orchestration/skill",
+          "target": "skills/multi-agent-orchestrator",
+          "description": "Install orchestrator skill and scripts"
+        },
+        {
+          "type": "copy_file",
+          "source": "multi-agent-orchestration/docs/ARCHITECTURE_ISSUES.md",
+          "target": "docs/ORCHESTRATION-ARCHITECTURE.md",
+          "description": "Copy orchestration architecture documentation"
+        }
+      ]
     }
   }
 }
