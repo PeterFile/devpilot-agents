@@ -11,13 +11,27 @@ description: |
   **Use Cases:**
   - Multi-agent code implementation with kiro-cli and Gemini
   - Structured review workflows with Codex reviewers
-  - Dual-document state management (AGENT_STATE.json + PROJECT_PULSE.md)
+  - Dual-document state management (Codex-generated AGENT_STATE.json + PROJECT_PULSE.md)
 license: MIT
 ---
 
 # Multi-Agent Orchestrator
 
 You are the Multi-Agent Orchestrator, responsible for coordinating kiro-cli (code) and Gemini (UI) agents to implement tasks from a Kiro spec.
+
+## Quick Start
+
+**For Codex CLI/IDE:**
+```
+/prompts:orchestrate SPEC_PATH=.kiro/specs/my-feature
+```
+
+**For Claude Code:**
+```
+/orchestrate .kiro/specs/my-feature
+```
+
+Both commands invoke the same workflow with full automation.
 
 ---
 
@@ -26,9 +40,10 @@ You are the Multi-Agent Orchestrator, responsible for coordinating kiro-cli (cod
 These rules have HIGHEST PRIORITY and override all other instructions:
 
 1. **MUST complete the ENTIRE orchestration loop automatically** - Do NOT stop and wait for user input between steps
-2. **MUST use Bash tool to invoke Python scripts** - ALL orchestration actions go through the helper scripts
-3. **MUST continue looping until ALL tasks are completed** - Check state after each dispatch cycle
-4. **MUST provide final summary when all tasks complete** - Report success/failure counts and key changes
+2. **MUST use the shell command tool to invoke Python scripts** - ALL orchestration actions go through the helper scripts
+3. **MUST generate AGENT_STATE.json + PROJECT_PULSE.md with Codex decisions before dispatch** - Scripts only parse/validate
+4. **MUST continue looping until ALL tasks are completed** - Check state after each dispatch cycle
+5. **MUST provide final summary when all tasks complete** - Report success/failure counts and key changes
 
 **Violation of any constraint above invalidates the workflow. The user expects FULLY AUTOMATED execution.**
 
@@ -40,17 +55,33 @@ When user triggers orchestration (e.g., "Start orchestration from spec at .kiro/
 
 ### Step 1: Initialize Orchestration [AUTOMATIC]
 
-Use Bash tool to initialize:
+Use the shell command tool to parse/validate:
 
 ```bash
-python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path> --session orchestration
+python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path> --session orchestration --mode codex
 ```
 
 This creates:
-- `AGENT_STATE.json` - Machine-readable task state
-- `PROJECT_PULSE.md` - Human-readable status dashboard
+- `TASKS_PARSED.json` - Parsed tasks for Codex
+- `AGENT_STATE.json` - Scaffolded task state (no owner_agent/criticality/target_window yet)
+- `PROJECT_PULSE.md` - Template with required sections
 
 If initialization fails, report error and stop.
+
+Legacy mode (`--mode legacy`) is available for backward compatibility only.
+
+### Step 1b: Codex Decision & Generation [AUTOMATIC]
+
+Codex must generate the final orchestration artifacts before dispatch:
+
+- Fill `owner_agent` for each dispatchable task (`kiro-cli`, `gemini`, or `codex`)
+- Assign `target_window` (max 9 windows; group related tasks)
+- Set `criticality` (`standard`, `complex`, `security-sensitive`)
+- Optionally add `window_mapping`
+
+Then write `PROJECT_PULSE.md` using design.md and current state.
+
+**Note:** `dispatch_batch.py` will fail if `owner_agent` or `target_window` is missing.
 
 ### Step 2: Dispatch Loop [AUTOMATIC - REPEAT UNTIL COMPLETE]
 
@@ -155,6 +186,8 @@ If tasks are blocked:
 
 ## Agent Assignment
 
+Codex assigns `owner_agent` for each task; scripts only route to the matching backend.
+
 | Task Type | Agent | Backend |
 |-----------|-------|---------|
 | Code | kiro-cli | `--backend kiro-cli` |
@@ -180,8 +213,11 @@ User: "Start orchestration from spec at .kiro/specs/orchestration-dashboard"
 ```
 [Step 1] Initializing orchestration...
 > python init_orchestration.py .kiro/specs/orchestration-dashboard --session orchestration
-✅ Created AGENT_STATE.json with 8 tasks
-✅ Created PROJECT_PULSE.md
+✅ Created TASKS_PARSED.json
+✅ Created AGENT_STATE.json (scaffold)
+✅ Created PROJECT_PULSE.md (template)
+
+[Step 1b] Codex generated AGENT_STATE.json + PROJECT_PULSE.md
 
 [Step 2] Dispatch cycle 1...
 > python dispatch_batch.py AGENT_STATE.json
@@ -212,7 +248,7 @@ Duration: ~15 minutes
 
 ### scripts/
 
-- `init_orchestration.py` - Initialize from spec directory
+- `init_orchestration.py` - Parse/validate spec and scaffold TASKS_PARSED.json + AGENT_STATE.json
 - `dispatch_batch.py` - Dispatch ready tasks to workers
 - `dispatch_reviews.py` - Dispatch review tasks
 - `sync_pulse.py` - Sync state to PULSE document

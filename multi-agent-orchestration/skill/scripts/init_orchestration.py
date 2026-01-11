@@ -4,8 +4,9 @@ Orchestration Initialization Script
 
 Initializes multi-agent orchestration from a Kiro spec directory.
 - Parses tasks.md and validates spec files
-- Creates AGENT_STATE.json with tasks from tasks.md
-- Creates PROJECT_PULSE.md with mental model from design.md
+- Creates AGENT_STATE.json scaffold (no agent decisions by default)
+- Writes TASKS_PARSED.json for Codex to consume
+- Creates PROJECT_PULSE.md template (legacy mode can generate a filled PULSE)
 
 Requirements: 11.2, 11.4, 11.5, 11.6, 11.8
 """
@@ -33,14 +34,14 @@ from spec_parser import (
 )
 
 
-# Agent assignment by task type (Requirement 1.3, 11.5)
+# Legacy agent assignment by task type (Requirement 1.3, 11.5)
 AGENT_BY_TASK_TYPE = {
     TaskType.CODE: "kiro-cli",
     TaskType.UI: "gemini",
     TaskType.REVIEW: "codex-review",
 }
 
-# Keywords for criticality detection (Requirement 11.6)
+# Legacy keywords for criticality detection (Requirement 11.6)
 SECURITY_KEYWORDS = ["security", "auth", "password", "token", "encrypt", "credential", "secret"]
 COMPLEX_KEYWORDS = ["refactor", "migration", "integration", "architecture"]
 
@@ -58,11 +59,11 @@ class TaskEntry:
     description: str
     type: str
     status: str
-    owner_agent: str
     dependencies: List[str]
-    criticality: str
     is_optional: bool
     created_at: str
+    owner_agent: Optional[str] = None
+    criticality: Optional[str] = None
     # Parent-subtask relationship fields (Req 1.3, 1.4, 1.5)
     subtasks: List[str] = field(default_factory=list)
     parent_id: Optional[str] = None
@@ -83,7 +84,8 @@ class TaskEntry:
     details: List[str] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        return {key: value for key, value in data.items() if value is not None}
 
 
 @dataclass
@@ -108,6 +110,7 @@ class InitResult:
     """Result of initialization"""
     success: bool
     message: str
+    tasks_file: Optional[str] = None
     state_file: Optional[str] = None
     pulse_file: Optional[str] = None
     errors: List[str] = field(default_factory=list)
@@ -117,6 +120,8 @@ def determine_criticality(task: Task) -> str:
     """
     Determine task criticality based on description and details.
     
+    Legacy behavior: Codex should determine criticality in the orchestration phase.
+
     Requirement 11.6: Set initial criticality based on task markers
     - * for optional
     - security keywords for security-sensitive
@@ -141,12 +146,14 @@ def assign_owner_agent(task: Task) -> str:
     """
     Assign owner agent based on task type.
     
+    Legacy behavior: Codex should determine owner_agent in the orchestration phase.
+
     Requirement 1.3, 11.5: Determine appropriate agent based on task type
     """
     return AGENT_BY_TASK_TYPE.get(task.task_type, "kiro-cli")
 
 
-def convert_task_to_entry(task: Task) -> TaskEntry:
+def convert_task_to_entry(task: Task, include_decisions: bool = False) -> TaskEntry:
     """
     Convert parsed Task to TaskEntry for AGENT_STATE.json.
     
@@ -155,16 +162,19 @@ def convert_task_to_entry(task: Task) -> TaskEntry:
     - writes, reads for file conflict detection (Req 2.1, 2.2)
     - fix loop fields for retry mechanism (Req 3.10)
     """
+    owner_agent = assign_owner_agent(task) if include_decisions else None
+    criticality = determine_criticality(task) if include_decisions else None
+
     return TaskEntry(
         task_id=task.task_id,
         description=task.description,
         type=task.task_type.value,
         status=task.status.value,
-        owner_agent=assign_owner_agent(task),
         dependencies=task.dependencies,
-        criticality=determine_criticality(task),
         is_optional=task.is_optional,
         created_at=datetime.utcnow().isoformat() + "Z",
+        owner_agent=owner_agent,
+        criticality=criticality,
         # Parent-subtask relationship fields (Req 1.3, 1.4, 1.5)
         subtasks=task.subtasks,
         parent_id=task.parent_id,
@@ -283,7 +293,7 @@ def extract_mental_model_from_design(design_path: str) -> Dict[str, str]:
 def generate_pulse_document(
     spec_path: str,
     mental_model: Dict[str, str],
-    tasks: List[TaskEntry]
+    tasks: List[Dict[str, Any]]
 ) -> str:
     """
     Generate PROJECT_PULSE.md content.
@@ -292,7 +302,7 @@ def generate_pulse_document(
     """
     # Count tasks by status
     total_tasks = len(tasks)
-    not_started = sum(1 for t in tasks if t.status == "not_started")
+    not_started = sum(1 for t in tasks if t.get("status") == "not_started")
     
     pulse_content = f"""# PROJECT_PULSE.md
 
@@ -337,10 +347,46 @@ def generate_pulse_document(
     return pulse_content
 
 
+def generate_pulse_template(spec_path: str) -> str:
+    """
+    Generate PROJECT_PULSE.md template without AI decisions.
+    
+    This keeps the document parsable by sync_pulse.py while delegating
+    content generation to Codex.
+    """
+    return f"""# PROJECT_PULSE
+
+## Mental Model
+
+<!-- Codex: Summarize the system mental model using design.md -->
+
+## Narrative Delta
+
+**Orchestration spec:** `{spec_path}`
+
+<!-- Codex: Add progress summary and recent completions -->
+
+## Risks & Debt
+
+### Cognitive Load Warnings
+- None
+
+### Technical Debt
+- None
+
+### Pending Decisions
+- None
+
+## Semantic Anchors
+- None
+"""
+
+
 def initialize_orchestration(
     spec_path: str,
     session_name: Optional[str] = None,
-    output_dir: Optional[str] = None
+    output_dir: Optional[str] = None,
+    mode: str = "codex"
 ) -> InitResult:
     """
     Initialize orchestration from spec directory.
@@ -349,6 +395,7 @@ def initialize_orchestration(
         spec_path: Path to spec directory containing requirements.md, design.md, tasks.md
         session_name: Tmux session name (default: derived from spec path)
         output_dir: Output directory for state files (default: spec_path parent)
+        mode: "codex" (scaffold) or "legacy" (script-driven decisions)
     
     Returns:
         InitResult with success status and file paths
@@ -376,14 +423,18 @@ def initialize_orchestration(
         )
     
     # Convert tasks to entries (Requirement 11.4, 11.5, 11.6)
-    task_entries = [convert_task_to_entry(t) for t in tasks_result.tasks]
+    include_decisions = mode == "legacy"
+    task_entries = [
+        convert_task_to_entry(t, include_decisions=include_decisions)
+        for t in tasks_result.tasks
+    ]
     
     # Determine session name
     if not session_name:
         spec_name = Path(spec_path).name
         session_name = f"orch-{spec_name}"
     
-    # Create AGENT_STATE.json
+    # Create AGENT_STATE.json (scaffold by default)
     agent_state = AgentState(
         spec_path=os.path.abspath(spec_path),
         session_name=session_name,
@@ -398,6 +449,21 @@ def initialize_orchestration(
     
     out_path.mkdir(parents=True, exist_ok=True)
     
+    # Write TASKS_PARSED.json for Codex consumption
+    tasks_file = out_path / "TASKS_PARSED.json"
+    try:
+        with open(tasks_file, 'w', encoding='utf-8') as f:
+            json.dump(
+                {
+                    "spec_path": os.path.abspath(spec_path),
+                    "tasks": [t.to_dict() for t in task_entries],
+                },
+                f,
+                indent=2
+            )
+    except Exception as e:
+        errors.append(f"Failed to write TASKS_PARSED.json: {e}")
+    
     # Write AGENT_STATE.json
     state_file = out_path / "AGENT_STATE.json"
     try:
@@ -406,12 +472,18 @@ def initialize_orchestration(
     except Exception as e:
         errors.append(f"Failed to write AGENT_STATE.json: {e}")
     
-    # Extract mental model from design.md (Requirement 11.8)
-    design_path = os.path.join(spec_path, "design.md")
-    mental_model = extract_mental_model_from_design(design_path)
-    
     # Generate and write PROJECT_PULSE.md
-    pulse_content = generate_pulse_document(spec_path, mental_model, task_entries)
+    if mode == "legacy":
+        # Extract mental model from design.md (Requirement 11.8)
+        design_path = os.path.join(spec_path, "design.md")
+        mental_model = extract_mental_model_from_design(design_path)
+        pulse_content = generate_pulse_document(
+            spec_path,
+            mental_model,
+            [t.to_dict() for t in task_entries]
+        )
+    else:
+        pulse_content = generate_pulse_template(spec_path)
     pulse_file = out_path / "PROJECT_PULSE.md"
     try:
         with open(pulse_file, 'w', encoding='utf-8') as f:
@@ -423,6 +495,7 @@ def initialize_orchestration(
         return InitResult(
             success=False,
             message="Initialization completed with errors",
+            tasks_file=str(tasks_file),
             state_file=str(state_file),
             pulse_file=str(pulse_file),
             errors=errors
@@ -431,6 +504,7 @@ def initialize_orchestration(
     return InitResult(
         success=True,
         message=f"Orchestration initialized successfully",
+        tasks_file=str(tasks_file),
         state_file=str(state_file),
         pulse_file=str(pulse_file)
     )
@@ -460,19 +534,27 @@ def main():
         action="store_true",
         help="Output result as JSON"
     )
+    parser.add_argument(
+        "--mode",
+        choices=["codex", "legacy"],
+        default="codex",
+        help="Initialization mode: codex (scaffold) or legacy (script-driven)"
+    )
     
     args = parser.parse_args()
     
     result = initialize_orchestration(
         args.spec_path,
         session_name=args.session,
-        output_dir=args.output
+        output_dir=args.output,
+        mode=args.mode
     )
     
     if args.json:
         output = {
             "success": result.success,
             "message": result.message,
+            "tasks_file": result.tasks_file,
             "state_file": result.state_file,
             "pulse_file": result.pulse_file,
             "errors": result.errors
@@ -482,6 +564,8 @@ def main():
         if result.success:
             print(f"✅ {result.message}")
             print(f"   State file: {result.state_file}")
+            if result.tasks_file:
+                print(f"   Tasks file: {result.tasks_file}")
             print(f"   PULSE file: {result.pulse_file}")
         else:
             print(f"❌ {result.message}")

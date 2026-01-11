@@ -233,6 +233,16 @@ def test_task_entry_conversion(task):
     assert entry.status == task.status.value
     assert entry.is_optional == task.is_optional
     assert entry.dependencies == task.dependencies
+    assert entry.owner_agent is None
+    assert entry.criticality is None
+
+
+@given(task=task_strategy())
+@settings(max_examples=100, deadline=None)
+def test_task_entry_conversion_legacy(task):
+    """Test legacy task conversion includes decision fields."""
+    entry = convert_task_to_entry(task, include_decisions=True)
+    
     assert entry.owner_agent in {"kiro-cli", "gemini", "codex-review"}
     assert entry.criticality in {"standard", "complex", "security-sensitive"}
 
@@ -255,9 +265,10 @@ def test_initialization_with_valid_spec():
 """)
         
         # Initialize
-        result = initialize_orchestration(str(spec_path))
+        result = initialize_orchestration(str(spec_path), mode="codex")
         
         assert result.success, f"Initialization failed: {result.errors}"
+        assert result.tasks_file is not None
         assert result.state_file is not None
         assert result.pulse_file is not None
         
@@ -269,9 +280,39 @@ def test_initialization_with_valid_spec():
         assert len(state["tasks"]) == 2
         assert state["tasks"][0]["task_id"] == "1"
         assert state["tasks"][1]["task_id"] == "2"
+        assert "owner_agent" not in state["tasks"][0]
+        assert "criticality" not in state["tasks"][0]
+        
+        # Verify TASKS_PARSED.json exists
+        assert os.path.exists(result.tasks_file)
         
         # Verify PULSE file exists
         assert os.path.exists(result.pulse_file)
+
+
+def test_initialization_with_legacy_mode_sets_decisions():
+    """Integration test: Legacy mode populates decision fields."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        spec_path = Path(tmpdir) / "test-spec"
+        spec_path.mkdir()
+        
+        # Create minimal spec files
+        (spec_path / "requirements.md").write_text("# Requirements\n\nTest requirements.")
+        (spec_path / "design.md").write_text("# Design\n\n## Overview\n\nTest design.")
+        (spec_path / "tasks.md").write_text("""# Tasks
+
+- [ ] 1 Implement feature A
+""")
+        
+        result = initialize_orchestration(str(spec_path), mode="legacy")
+        
+        assert result.success, f"Initialization failed: {result.errors}"
+        
+        with open(result.state_file) as f:
+            state = json.load(f)
+        
+        assert "owner_agent" in state["tasks"][0]
+        assert "criticality" in state["tasks"][0]
 
 
 def test_initialization_with_invalid_spec():
@@ -303,10 +344,12 @@ def test_dispatch_batch_failure_keeps_tasks_not_started():
             "spec_path": "/test/spec",
             "session_name": "test-session",
             "tasks": [
-                {"task_id": "1", "description": "Task 1", "status": "not_started", 
-                 "owner_agent": "kiro-cli", "dependencies": [], "criticality": "standard"},
+                {"task_id": "1", "description": "Task 1", "status": "not_started",
+                 "owner_agent": "kiro-cli", "target_window": "kiro-cli",
+                 "dependencies": [], "criticality": "standard"},
                 {"task_id": "2", "description": "Task 2", "status": "not_started",
-                 "owner_agent": "kiro-cli", "dependencies": [], "criticality": "standard"},
+                 "owner_agent": "kiro-cli", "target_window": "kiro-cli",
+                 "dependencies": [], "criticality": "standard"},
             ],
             "review_findings": [],
             "final_reports": [],
@@ -348,7 +391,8 @@ def test_fix_dispatch_failure_reports_errors():
             "session_name": "test-session",
             "tasks": [
                 {"task_id": "1", "description": "Fix task", "status": "fix_required",
-                 "owner_agent": "kiro-cli", "dependencies": [], "criticality": "standard",
+                 "owner_agent": "kiro-cli", "target_window": "kiro-cli",
+                 "dependencies": [], "criticality": "standard",
                  "fix_attempts": 0, "last_review_severity": "major",
                  "review_history": [{
                      "attempt": 0,
@@ -595,7 +639,9 @@ if __name__ == "__main__":
         ("Security Criticality Detection", test_security_criticality_detection),
         ("Complex Criticality Detection", test_complex_criticality_detection),
         ("Task Entry Conversion", test_task_entry_conversion),
+        ("Task Entry Conversion Legacy", test_task_entry_conversion_legacy),
         ("Integration: Valid Spec", test_initialization_with_valid_spec),
+        ("Integration: Legacy Mode", test_initialization_with_legacy_mode_sets_decisions),
         ("Integration: Invalid Spec", test_initialization_with_invalid_spec),
         ("P1 Fix: Dispatch Batch Failure Rollback", test_dispatch_batch_failure_keeps_tasks_not_started),
         ("P3 Coverage: Dispatch Batch Partial Failure", test_dispatch_batch_partial_failure_handles_results),

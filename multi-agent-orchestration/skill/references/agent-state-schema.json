@@ -170,6 +170,10 @@
         "tests_failed": { "type": "integer" },
         "window_id": { "type": "string" },
         "pane_id": { "type": "string" },
+        "target_window": {
+          "type": "string",
+          "description": "Tmux window assignment provided by Codex"
+        },
         "created_at": { "type": "string", "format": "date-time" },
         "completed_at": { "type": "string", "format": "date-time" }
       }

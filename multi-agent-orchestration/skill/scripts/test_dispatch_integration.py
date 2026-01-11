@@ -123,6 +123,23 @@ def create_test_spec_directory(base_dir: str) -> str:
     return str(spec_dir)
 
 
+TYPE_TO_AGENT = {
+    "code": "kiro-cli",
+    "ui": "gemini",
+    "review": "codex-review",
+}
+
+
+def apply_codex_assignments(state: Dict[str, Any]) -> None:
+    """Assign owner_agent/criticality/target_window for dispatch tests."""
+    for task in state.get("tasks", []):
+        task_type = task.get("type", "code")
+        owner_agent = task.get("owner_agent") or TYPE_TO_AGENT.get(task_type, "kiro-cli")
+        task["owner_agent"] = owner_agent
+        task.setdefault("criticality", "standard")
+        task.setdefault("target_window", owner_agent)
+
+
 class TestParentTaskFiltering:
     """Tests for parent task filtering (Req 1.1, 1.2)."""
     
@@ -414,6 +431,7 @@ class TestFixLoopIntegration:
                     task["status"] = "fix_required"
                     task["fix_attempts"] = 0
                     task["last_review_severity"] = "major"
+                    task["owner_agent"] = "claude"  # Required for fix loop dispatch
                     task["review_history"] = [{
                         "attempt": 0,
                         "severity": "major",
@@ -468,6 +486,7 @@ class TestFixLoopIntegration:
                         "reviewed_at": "2026-01-08T10:00:00Z"
                     }]
             
+            apply_codex_assignments(state)
             save_agent_state(result.state_file, state)
             
             # Dispatch in dry-run mode
@@ -521,6 +540,9 @@ class TestDispatchChainIntegration:
                 assert len(task.get("subtasks", [])) == 0, \
                     f"Ready task {task['task_id']} should be a leaf task"
             
+            apply_codex_assignments(state)
+            save_agent_state(result.state_file, state)
+
             # Dispatch dry-run
             dispatch_result = dispatch_batch(
                 result.state_file,
@@ -723,6 +745,7 @@ class TestFixLoopCompletionFlow:
                     task["status"] = "fix_required"
                     task["fix_attempts"] = 0
                     task["last_review_severity"] = "major"
+                    task["owner_agent"] = "claude"  # Required for fix loop dispatch
                     task["review_history"] = [{
                         "attempt": 0,
                         "severity": "major",

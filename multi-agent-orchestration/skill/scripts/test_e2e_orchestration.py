@@ -24,7 +24,7 @@ from typing import Dict, Any
 sys.path.insert(0, str(Path(__file__).parent))
 
 from spec_parser import parse_tasks, validate_spec_directory, TaskStatus, TaskType
-from init_orchestration import initialize_orchestration, AGENT_BY_TASK_TYPE
+from init_orchestration import initialize_orchestration
 from dispatch_batch import dispatch_batch, get_ready_tasks, build_task_configs, load_agent_state
 from sync_pulse import sync_pulse_files, parse_pulse, generate_pulse
 from fix_loop import (
@@ -217,7 +217,7 @@ def verify_agent_state_structure(state: Dict[str, Any]) -> list:
     return errors
 
 
-def verify_task_entry_structure(task: Dict[str, Any]) -> list:
+def verify_task_entry_structure(task: Dict[str, Any], require_decisions: bool = False) -> list:
     """Verify a task entry has all required fields."""
     errors = []
     
@@ -226,10 +226,10 @@ def verify_task_entry_structure(task: Dict[str, Any]) -> list:
         "description",
         "type",
         "status",
-        "owner_agent",
         "dependencies",
-        "criticality",
     ]
+    if require_decisions:
+        required_fields.extend(["owner_agent", "criticality", "target_window"])
     
     for field in required_fields:
         if field not in task:
@@ -241,15 +241,43 @@ def verify_task_entry_structure(task: Dict[str, Any]) -> list:
     if task.get("status") not in valid_statuses:
         errors.append(f"Invalid status: {task.get('status')}")
     
-    valid_criticalities = ["standard", "complex", "security-sensitive"]
-    if task.get("criticality") not in valid_criticalities:
-        errors.append(f"Invalid criticality: {task.get('criticality')}")
-    
-    valid_agents = ["kiro-cli", "gemini", "codex-review"]
-    if task.get("owner_agent") not in valid_agents:
-        errors.append(f"Invalid owner_agent: {task.get('owner_agent')}")
+    if require_decisions:
+        valid_criticalities = ["standard", "complex", "security-sensitive"]
+        if task.get("criticality") not in valid_criticalities:
+            errors.append(f"Invalid criticality: {task.get('criticality')}")
+        
+        valid_agents = ["kiro-cli", "gemini", "codex-review", "codex"]
+        if task.get("owner_agent") not in valid_agents:
+            errors.append(f"Invalid owner_agent: {task.get('owner_agent')}")
     
     return errors
+
+
+TYPE_TO_AGENT = {
+    "code": "kiro-cli",
+    "ui": "gemini",
+    "review": "codex-review",
+}
+
+
+def apply_codex_assignments(state: Dict[str, Any]) -> None:
+    """Assign owner_agent/criticality/target_window for tests that dispatch."""
+    for task in state.get("tasks", []):
+        task_type = task.get("type", "code")
+        owner_agent = task.get("owner_agent") or TYPE_TO_AGENT.get(task_type, "kiro-cli")
+        task["owner_agent"] = owner_agent
+        task.setdefault("criticality", "standard")
+        task.setdefault("target_window", owner_agent)
+
+
+def apply_assignments_to_state_file(state_file: str) -> Dict[str, Any]:
+    """Load a state file, apply Codex assignments, and save."""
+    with open(state_file, encoding="utf-8") as f:
+        state = json.load(f)
+    apply_codex_assignments(state)
+    with open(state_file, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+    return state
 
 
 def verify_pulse_structure(content: str) -> list:
@@ -436,6 +464,7 @@ class TestE2EOrchestration:
             with open(result.state_file, encoding='utf-8') as f:
                 state = json.load(f)
             
+            apply_codex_assignments(state)
             ready_tasks = get_ready_tasks(state)
             configs = build_task_configs(ready_tasks, spec_path)
             
@@ -467,6 +496,8 @@ class TestE2EOrchestration:
             
             assert init_result.success
             
+            apply_assignments_to_state_file(init_result.state_file)
+
             # Dispatch in dry-run mode
             dispatch_result = dispatch_batch(
                 init_result.state_file,
@@ -560,6 +591,7 @@ class TestE2EOrchestration:
             assert len(ready_tasks) > 0, "Should have ready tasks"
             
             # Step 3: Dispatch (dry-run)
+            apply_assignments_to_state_file(init_result.state_file)
             dispatch_result = dispatch_batch(
                 init_result.state_file,
                 dry_run=True
@@ -625,7 +657,8 @@ class TestE2EOrchestration:
             result = initialize_orchestration(
                 spec_path,
                 session_name="test-session",
-                output_dir=str(output_dir)
+                output_dir=str(output_dir),
+                mode="legacy"
             )
             
             assert result.success

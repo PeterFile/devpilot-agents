@@ -46,6 +46,7 @@ AGENT_TO_BACKEND = {
     "kiro-cli": "kiro-cli",
     "gemini": "gemini",
     "codex-review": "codex",
+    "codex": "codex",
 }
 
 
@@ -374,6 +375,24 @@ def get_ready_tasks(state: Dict[str, Any], strict_dependencies: bool = True) -> 
     return ready
 
 
+def find_missing_dispatch_fields(tasks: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    """
+    Identify tasks missing required dispatch fields.
+    
+    Codex must set owner_agent and target_window before dispatch.
+    """
+    missing: Dict[str, List[str]] = {}
+    for task in tasks:
+        fields = []
+        if not task.get("owner_agent"):
+            fields.append("owner_agent")
+        if not task.get("target_window"):
+            fields.append("target_window")
+        if fields:
+            missing[task.get("task_id", "unknown")] = fields
+    return missing
+
+
 def build_task_content(task: Dict[str, Any], spec_path: str) -> str:
     """
     Build task content/prompt for the worker agent.
@@ -411,14 +430,21 @@ def build_task_configs(
     """
     Build task configurations for codeagent-wrapper.
     
-    Requirement 1.3, 1.4: Build task config for dispatch
+    Requirement 1.3, 1.4: Build task config for dispatch.
+    Expects Codex-provided owner_agent and target_window on each task.
     """
     configs = []
     
     for task in tasks:
-        owner_agent = task.get("owner_agent", "kiro-cli")
-        backend = AGENT_TO_BACKEND.get(owner_agent, "kiro-cli")
-        target_window = task.get("target_window") or owner_agent
+        owner_agent = task.get("owner_agent")
+        if not owner_agent:
+            raise ValueError(f"Task {task.get('task_id', 'unknown')} missing owner_agent")
+        backend = AGENT_TO_BACKEND.get(owner_agent)
+        if not backend:
+            raise ValueError(f"Task {task.get('task_id', 'unknown')} has unsupported owner_agent: {owner_agent}")
+        target_window = task.get("target_window")
+        if not target_window:
+            raise ValueError(f"Task {task.get('task_id', 'unknown')} missing target_window")
         
         config = TaskConfig(
             task_id=task["task_id"],
@@ -729,6 +755,20 @@ def dispatch_batch(
             success=True,
             message="No tasks ready for dispatch",
             tasks_dispatched=0
+        )
+
+    # Validate Codex-provided dispatch fields before proceeding
+    missing_fields = find_missing_dispatch_fields(ready_tasks)
+    if missing_fields:
+        missing_messages = [
+            f"{task_id}: missing {', '.join(fields)}"
+            for task_id, fields in missing_fields.items()
+        ]
+        return DispatchResult(
+            success=False,
+            message="Missing required dispatch fields. Populate owner_agent and target_window before dispatch.",
+            tasks_dispatched=0,
+            errors=missing_messages
         )
     
     # Partition tasks into conflict-free batches (Req 2.3, 2.4, 2.5, 2.6, 2.7)

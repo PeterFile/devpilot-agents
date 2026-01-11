@@ -618,7 +618,28 @@ def process_fix_loop(state: Dict[str, Any]) -> List[Dict[str, Any]]:
         
         # Determine backend (escalate to codex if needed)
         use_escalation = action == FixLoopAction.ESCALATE
-        backend = "codex" if use_escalation else task.get("owner_agent", "kiro-cli")
+        owner_agent = task.get("owner_agent")
+        if not owner_agent and not use_escalation:
+            state.setdefault("pending_decisions", [])
+            decision_id = f"missing-owner-agent-{task_id}"
+            if not any(d.get("id") == decision_id for d in state["pending_decisions"]):
+                state["pending_decisions"].append({
+                    "id": decision_id,
+                    "task_id": task_id,
+                    "priority": "high",
+                    "context": (
+                        "Fix loop cannot dispatch because owner_agent is missing. "
+                        "Codex must set owner_agent before retrying fixes."
+                    ),
+                    "options": [
+                        "Set owner_agent and retry fix loop",
+                        "Defer this fix task",
+                        "Abort orchestration"
+                    ],
+                    "created_at": datetime.utcnow().isoformat() + "Z"
+                })
+            continue
+        backend = "codex" if use_escalation else owner_agent
         
         if use_escalation and not task.get("escalated"):
             task["escalated"] = True
