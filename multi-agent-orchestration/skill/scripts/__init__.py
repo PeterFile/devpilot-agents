@@ -22,6 +22,9 @@ from .spec_parser import (
     get_ready_tasks,
     topological_sort,
     load_tasks_from_spec,
+    # New dispatch unit functions
+    is_dispatch_unit,
+    get_dispatchable_units,
 )
 
 from .init_orchestration import (
@@ -41,6 +44,12 @@ from .dispatch_batch import (
     dispatch_batch,
     get_ready_tasks as get_ready_tasks_from_state,
     build_task_configs,
+    # New dispatch unit types and functions
+    SubtaskInfo,
+    DispatchPayload,
+    build_dispatch_payload,
+    get_dispatchable_units_from_state,
+    handle_partial_completion,
 )
 
 from .dispatch_reviews import (
@@ -71,6 +80,9 @@ __all__ = [
     "get_ready_tasks",
     "topological_sort",
     "load_tasks_from_spec",
+    # spec_parser - dispatch unit functions
+    "is_dispatch_unit",
+    "get_dispatchable_units",
     # init_orchestration
     "TaskEntry",
     "AgentState",
@@ -86,6 +98,12 @@ __all__ = [
     "dispatch_batch",
     "get_ready_tasks_from_state",
     "build_task_configs",
+    # dispatch_batch - dispatch unit types and functions
+    "SubtaskInfo",
+    "DispatchPayload",
+    "build_dispatch_payload",
+    "get_dispatchable_units_from_state",
+    "handle_partial_completion",
     # dispatch_reviews
     "ReviewTaskConfig",
     "ReviewReport",

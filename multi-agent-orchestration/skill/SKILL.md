@@ -196,6 +196,50 @@ Codex assigns `owner_agent` for each task; scripts only route to the matching ba
 
 ---
 
+## Dispatch Unit Concept
+
+The orchestrator uses **dispatch units** to optimize task execution. A dispatch unit is the atomic unit of work dispatched to an agent.
+
+### What is a Dispatch Unit?
+
+- **Parent tasks with subtasks**: The parent task becomes the dispatch unit, and all its subtasks are bundled together for sequential execution by a single agent
+- **Standalone tasks**: Tasks without subtasks or parent are dispatched individually
+
+### Benefits
+
+1. **Reduced context switching**: Agent receives all related subtasks at once
+2. **Better coherence**: Subtasks share context and can reference each other's work
+3. **Simplified coordination**: One dispatch per logical work unit instead of per leaf task
+
+### Dispatch Payload Structure
+
+When a dispatch unit is sent to an agent, it includes:
+
+```json
+{
+  "dispatch_unit_id": "task-001",
+  "description": "Parent task description",
+  "subtasks": [
+    {"task_id": "task-001.1", "title": "First subtask", "details": "..."},
+    {"task_id": "task-001.2", "title": "Second subtask", "details": "..."}
+  ],
+  "spec_path": ".kiro/specs/my-feature"
+}
+```
+
+### Error Handling
+
+If a subtask fails during execution:
+- Completed subtasks are preserved
+- Failed subtask and parent are marked as `blocked`
+- Resume continues from the failed subtask, not from the beginning
+
+### Backward Compatibility
+
+Flat task files (no hierarchy) work exactly as before - each task is treated as a standalone dispatch unit.
+
+---
+
 ## Task State Machine
 
 ```
