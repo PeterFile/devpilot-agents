@@ -15,7 +15,7 @@ Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.6, 6.1, 6.2, 6.3, 6
 
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set
@@ -179,7 +179,7 @@ def block_dependent_tasks(state: Dict[str, Any], task_id: str, reason: str) -> N
         "task_id": task_id,
         "blocking_reason": reason,
         "dependent_tasks": list(dependent_ids),
-        "created_at": datetime.utcnow().isoformat() + "Z"
+        "created_at": datetime.now(timezone.utc).isoformat()
     })
 
 
@@ -232,7 +232,7 @@ def enter_fix_loop(state: Dict[str, Any], task_id: str, review_findings: List[Di
         "attempt": completed_attempts,  # 0 for initial, 1/2/3 for fix attempts
         "severity": overall_severity,
         "findings": review_findings,  # List of {severity, summary, details}
-        "reviewed_at": datetime.utcnow().isoformat() + "Z"
+        "reviewed_at": datetime.now(timezone.utc).isoformat()
     })
     
     # Block dependent tasks (Req 3.2)
@@ -636,14 +636,14 @@ def process_fix_loop(state: Dict[str, Any]) -> List[Dict[str, Any]]:
                         "Defer this fix task",
                         "Abort orchestration"
                     ],
-                    "created_at": datetime.utcnow().isoformat() + "Z"
+                    "created_at": datetime.now(timezone.utc).isoformat()
                 })
             continue
         backend = "codex" if use_escalation else owner_agent
         
         if use_escalation and not task.get("escalated"):
             task["escalated"] = True
-            task["escalated_at"] = datetime.utcnow().isoformat() + "Z"
+            task["escalated_at"] = datetime.now(timezone.utc).isoformat()
             task["original_agent"] = task.get("owner_agent")
         
         # Transition to in_progress
@@ -713,7 +713,7 @@ Action Required:
             "Skip this task - continue without it",
             "Abort orchestration"
         ],
-        "created_at": datetime.utcnow().isoformat() + "Z"
+        "created_at": datetime.now(timezone.utc).isoformat()
     })
     
     # Block dependent tasks

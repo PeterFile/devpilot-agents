@@ -16,7 +16,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 
@@ -172,7 +172,7 @@ def convert_task_to_entry(task: Task, include_decisions: bool = False) -> TaskEn
         status=task.status.value,
         dependencies=task.dependencies,
         is_optional=task.is_optional,
-        created_at=datetime.utcnow().isoformat() + "Z",
+        created_at=datetime.now(timezone.utc).isoformat(),
         owner_agent=owner_agent,
         criticality=criticality,
         # Parent-subtask relationship fields (Req 1.3, 1.4, 1.5)

@@ -185,11 +185,21 @@ def add_final_report(state: Dict[str, Any], report: FinalReport) -> None:
 
 def update_task_to_completed(state: Dict[str, Any], task_id: str) -> None:
     """Update task status to completed"""
-    for task in state.get("tasks", []):
-        if task["task_id"] == task_id:
-            task["status"] = "completed"
-            task["completed_at"] = datetime.now(timezone.utc).isoformat()
-            break
+    task_map = {t.get("task_id"): t for t in state.get("tasks", [])}
+    task = task_map.get(task_id)
+    if not task:
+        return
+
+    completed_at = datetime.now(timezone.utc).isoformat()
+    task["status"] = "completed"
+    task["completed_at"] = completed_at
+
+    # Propagate completion to subtasks for dispatch units
+    for sid in task.get("subtasks", []):
+        subtask = task_map.get(sid)
+        if subtask:
+            subtask["status"] = "completed"
+            subtask["completed_at"] = completed_at
 
 
 def consolidate_reviews(
