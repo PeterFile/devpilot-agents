@@ -16,7 +16,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Set
 
@@ -33,6 +33,17 @@ REVIEW_COUNT_BY_CRITICALITY = {
     "complex": 2,
     "security-sensitive": 2,
 }
+
+
+def _task_id_sort_key(task_id: str) -> List[Any]:
+    """Sort key for task IDs like '1.2.3' using numeric ordering."""
+    key: List[Any] = []
+    for part in task_id.split("."):
+        if part.isdigit():
+            key.append(int(part))
+        else:
+            key.append(part)
+    return key
 
 
 @dataclass
@@ -93,16 +104,45 @@ def save_agent_state(state_file: str, state: Dict[str, Any]) -> None:
     os.replace(tmp_file, state_file)
 
 
+def _is_dispatch_unit(task: Dict[str, Any]) -> bool:
+    """
+    Check if task is a dispatch unit (parent or standalone).
+    """
+    subtasks = task.get("subtasks", [])
+    parent_id = task.get("parent_id")
+    if subtasks:
+        return True
+    if parent_id is None:
+        return True
+    return False
+
+
 def get_tasks_pending_review(state: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Get tasks in pending_review status.
-    
-    Requirement 8.1: Identify tasks needing review
+    Get dispatch units pending review.
+
+    - Parent tasks: all subtasks are pending_review
+    - Standalone tasks: task itself is pending_review
+
+    Requirement 9.1: Identify dispatch units needing review
     """
+    task_map = {t.get("task_id"): t for t in state.get("tasks", [])}
     pending = []
+
     for task in state.get("tasks", []):
-        if task.get("status") == "pending_review":
-            pending.append(task)
+        if not _is_dispatch_unit(task):
+            continue
+
+        subtask_ids = task.get("subtasks", [])
+        if subtask_ids:
+            # Parent task: all subtasks must be pending_review
+            if all(task_map.get(sid, {}).get("status") == "pending_review" for sid in subtask_ids):
+                pending.append(task)
+        else:
+            # Standalone task
+            if task.get("status") == "pending_review":
+                pending.append(task)
+
     return pending
 
 
@@ -116,7 +156,12 @@ def get_review_count(task: Dict[str, Any]) -> int:
     return REVIEW_COUNT_BY_CRITICALITY.get(criticality, 1)
 
 
-def build_review_content(task: Dict[str, Any], spec_path: str, reviewer_index: int) -> str:
+def build_review_content(
+    task: Dict[str, Any],
+    spec_path: str,
+    reviewer_index: int,
+    all_tasks: Optional[List[Dict[str, Any]]] = None
+) -> str:
     """
     Build review task content/prompt.
     
@@ -124,6 +169,7 @@ def build_review_content(task: Dict[str, Any], spec_path: str, reviewer_index: i
     """
     files_changed = task.get("files_changed", [])
     output = task.get("output", "")
+    task_map = {t.get("task_id"): t for t in all_tasks} if all_tasks else {}
     
     lines = [
         f"Review Task: {task['task_id']}",
@@ -146,16 +192,41 @@ def build_review_content(task: Dict[str, Any], spec_path: str, reviewer_index: i
         "",
     ]
     
-    if files_changed:
-        lines.append("## Files Changed")
-        for f in files_changed:
-            lines.append(f"- {f}")
-        lines.append("")
-    
-    if output:
-        lines.append("## Implementation Summary")
-        lines.append(output[:500])  # Truncate long output
-        lines.append("")
+    subtask_ids = task.get("subtasks", [])
+    if subtask_ids and task_map:
+        lines.append("## Subtask Outputs")
+        for sid in sorted(subtask_ids, key=_task_id_sort_key):
+            subtask = task_map.get(sid, {})
+            subtask_desc = subtask.get("description", "No description")
+            subtask_status = subtask.get("status", "not_started")
+            subtask_files = subtask.get("files_changed", [])
+            subtask_output = subtask.get("output", "")
+
+            lines.append(f"### {sid} - {subtask_desc}")
+            lines.append(f"Status: {subtask_status}")
+
+            if subtask_files:
+                lines.append("Files Changed:")
+                for f in subtask_files:
+                    lines.append(f"- {f}")
+
+            if subtask_output:
+                lines.append("Output Summary:")
+                lines.append(subtask_output[:500])
+            else:
+                lines.append("Output Summary: (none)")
+            lines.append("")
+    else:
+        if files_changed:
+            lines.append("## Files Changed")
+            for f in files_changed:
+                lines.append(f"- {f}")
+            lines.append("")
+
+        if output:
+            lines.append("## Implementation Summary")
+            lines.append(output[:500])  # Truncate long output
+            lines.append("")
     
     lines.extend([
         "## Output Format",
@@ -179,7 +250,8 @@ def build_review_content(task: Dict[str, Any], spec_path: str, reviewer_index: i
 def build_review_configs(
     tasks: List[Dict[str, Any]],
     spec_path: str,
-    workdir: str = "."
+    workdir: str = ".",
+    all_tasks: Optional[List[Dict[str, Any]]] = None
 ) -> List[ReviewTaskConfig]:
     """
     Build review task configurations.
@@ -188,6 +260,8 @@ def build_review_configs(
     """
     configs = []
     
+    task_lookup = all_tasks or tasks
+
     for task in tasks:
         task_id = task["task_id"]
         review_count = get_review_count(task)
@@ -201,7 +275,7 @@ def build_review_configs(
                 task_id=task_id,
                 backend="codex",
                 workdir=workdir,
-                content=build_review_content(task, spec_path, reviewer_index),
+                content=build_review_content(task, spec_path, reviewer_index, task_lookup),
                 reviewer_index=reviewer_index,
             )
             configs.append(config)
@@ -300,16 +374,31 @@ def invoke_codeagent_wrapper(
 
 def update_task_to_under_review(state: Dict[str, Any], task_ids: List[str]) -> None:
     """Update tasks to under_review status"""
-    for task in state.get("tasks", []):
-        if task["task_id"] in task_ids:
-            task["status"] = "under_review"
+    task_map = {t.get("task_id"): t for t in state.get("tasks", [])}
+    for task_id in task_ids:
+        task = task_map.get(task_id)
+        if not task:
+            continue
+        task["status"] = "under_review"
+        for sid in task.get("subtasks", []):
+            subtask = task_map.get(sid)
+            if subtask and subtask.get("status") == "pending_review":
+                subtask["status"] = "under_review"
 
 
 def rollback_tasks_to_pending_review(state: Dict[str, Any], task_ids: List[str]) -> None:
     """Rollback tasks to pending_review status (for failed dispatch)"""
-    for task in state.get("tasks", []):
-        if task["task_id"] in task_ids and task.get("status") == "under_review":
+    task_map = {t.get("task_id"): t for t in state.get("tasks", [])}
+    for task_id in task_ids:
+        task = task_map.get(task_id)
+        if not task:
+            continue
+        if task.get("status") == "under_review":
             task["status"] = "pending_review"
+        for sid in task.get("subtasks", []):
+            subtask = task_map.get(sid)
+            if subtask and subtask.get("status") == "under_review":
+                subtask["status"] = "pending_review"
 
 
 def add_review_findings(
@@ -329,7 +418,7 @@ def add_review_findings(
             "severity": result.get("severity", "none"),
             "summary": result.get("summary", "Review completed"),
             "details": result.get("details", ""),
-            "created_at": datetime.utcnow().isoformat() + "Z",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         
         state.setdefault("review_findings", []).append(finding)
@@ -361,13 +450,20 @@ def check_all_reviews_complete(state: Dict[str, Any], task_id: str) -> bool:
 def update_completed_reviews_to_final(state: Dict[str, Any]) -> List[str]:
     """Update tasks with all reviews complete to final_review status"""
     updated = []
-    
+
+    task_map = {t.get("task_id"): t for t in state.get("tasks", [])}
+
     for task in state.get("tasks", []):
         if task.get("status") == "under_review":
             if check_all_reviews_complete(state, task["task_id"]):
                 task["status"] = "final_review"
                 updated.append(task["task_id"])
-    
+                # Propagate to subtasks for dispatch units
+                for sid in task.get("subtasks", []):
+                    subtask = task_map.get(sid)
+                    if subtask and subtask.get("status") in ["under_review", "pending_review"]:
+                        subtask["status"] = "final_review"
+
     return updated
 
 
@@ -415,7 +511,7 @@ def dispatch_reviews(
     # Build review configs
     spec_path = state.get("spec_path", ".")
     session_name = state.get("session_name", "orchestration")
-    configs = build_review_configs(pending_tasks, spec_path, workdir)
+    configs = build_review_configs(pending_tasks, spec_path, workdir, all_tasks=state.get("tasks", []))
     task_ids = [t["task_id"] for t in pending_tasks]
     
     # Invoke codeagent-wrapper (don't update state until we know result)
