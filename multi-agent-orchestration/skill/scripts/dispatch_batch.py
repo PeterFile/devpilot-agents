@@ -873,6 +873,40 @@ def build_heredoc_input(configs: List[TaskConfig]) -> str:
     return "\n\n".join(config.to_heredoc() for config in configs)
 
 
+def _looks_like_tmux_connect_error(output: str) -> bool:
+    """Detect tmux socket connection failures that can be fixed via TMUX_TMPDIR."""
+    if not output:
+        return False
+    text = output.lower()
+    if "tmux" not in text:
+        return False
+    return (
+        "error connecting to /tmp/tmux" in text
+        or "failed to connect to /tmp/tmux" in text
+        or "operation not permitted" in text
+        or "permission denied" in text
+    )
+
+
+def _ensure_tmux_tmpdir(env: Dict[str, str]) -> Optional[str]:
+    """Ensure TMUX_TMPDIR is set to a writable user directory."""
+    current = env.get("TMUX_TMPDIR", "").strip()
+    if current:
+        return current
+    tmpdir = os.path.join(os.path.expanduser("~"), ".tmux-tmp")
+    try:
+        os.makedirs(tmpdir, exist_ok=True)
+        try:
+            os.chmod(tmpdir, 0o700)
+        except OSError:
+            pass
+    except OSError:
+        return None
+    env["TMUX_TMPDIR"] = tmpdir
+    os.environ.setdefault("TMUX_TMPDIR", tmpdir)
+    return tmpdir
+
+
 def invoke_codeagent_wrapper(
     configs: List[TaskConfig],
     session_name: str,
@@ -907,16 +941,35 @@ def invoke_codeagent_wrapper(
     if use_tmux:
         cmd += ["--tmux-session", session_name]
     cmd += ["--state-file", state_file]
-    
+    cmd_env = os.environ.copy()
+
     try:
         result = subprocess.run(
             cmd,
             input=heredoc_input,
             capture_output=True,
             text=True,
+            env=cmd_env,
             timeout=3600  # 1 hour timeout
         )
-        
+        if use_tmux and result.returncode != 0:
+            combined = (result.stderr or "") + "\n" + (result.stdout or "")
+            if _looks_like_tmux_connect_error(combined):
+                tmpdir = _ensure_tmux_tmpdir(cmd_env)
+                if tmpdir:
+                    logger.warning(
+                        "tmux connect failed; retrying with TMUX_TMPDIR=%s",
+                        tmpdir
+                    )
+                    result = subprocess.run(
+                        cmd,
+                        input=heredoc_input,
+                        capture_output=True,
+                        text=True,
+                        env=cmd_env,
+                        timeout=3600
+                    )
+
         # Parse output as JSON if possible
         try:
             report_data = json.loads(result.stdout)

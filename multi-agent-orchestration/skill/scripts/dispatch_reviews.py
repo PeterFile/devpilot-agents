@@ -63,7 +63,6 @@ class ReviewTaskConfig:
             f"id: {self.review_id}",
             f"backend: {self.backend}",
             f"workdir: {self.workdir}",
-            f"dependencies: {self.task_id}",
             "---CONTENT---",
             self.content,
         ]
