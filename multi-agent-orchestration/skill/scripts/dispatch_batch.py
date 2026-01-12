@@ -898,13 +898,15 @@ def invoke_codeagent_wrapper(
             task_results=[{"task_id": c.task_id, "status": "dry_run"} for c in configs]
         )
     
-    # Build command
-    cmd = [
-        "codeagent-wrapper",
-        "--parallel",
-        "--tmux-session", session_name,
-        "--state-file", state_file,
-    ]
+    # Build command (allow disabling tmux in restricted environments)
+    use_tmux = os.environ.get("CODEAGENT_NO_TMUX", "").strip().lower() not in {"1", "true", "yes"}
+    full_output = os.environ.get("CODEAGENT_FULL_OUTPUT", "").strip().lower() in {"1", "true", "yes"}
+    cmd = ["codeagent-wrapper", "--parallel"]
+    if full_output:
+        cmd.append("--full-output")
+    if use_tmux:
+        cmd += ["--tmux-session", session_name]
+    cmd += ["--state-file", state_file]
     
     try:
         result = subprocess.run(
