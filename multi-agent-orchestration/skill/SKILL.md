@@ -77,11 +77,18 @@ Codex must generate the final orchestration artifacts before dispatch:
 - Fill `owner_agent` for each dispatchable task (`kiro-cli`, `gemini`, or `codex`)
 - Assign `target_window` (max 9 windows; group related tasks)
 - Set `criticality` (`standard`, `complex`, `security-sensitive`)
+- Fill `writes` and `reads` arrays for file conflict detection (enables parallel execution)
 - Optionally add `window_mapping`
+
+**File Manifest (`writes` / `reads`):**
+- `writes`: Files the task will create or modify (e.g., `["src/api/auth.py", "src/models/user.py"]`)
+- `reads`: Files the task will read but not modify (e.g., `["src/config.py"]`)
+- Tasks with non-overlapping `writes` can run in parallel
+- Tasks WITHOUT `writes`/`reads` will be executed serially (conservative default)
 
 Then write `PROJECT_PULSE.md` using design.md and current state.
 
-**Note:** `dispatch_batch.py` will fail if `owner_agent` or `target_window` is missing.
+**Note:** `dispatch_batch.py` will fail if `owner_agent` or `target_window` is missing. Tasks without `writes`/`reads` will run serially.
 
 ### Step 2: Dispatch Loop [AUTOMATIC - REPEAT UNTIL COMPLETE]
 
