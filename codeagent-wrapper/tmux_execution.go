@@ -146,9 +146,6 @@ func (r *tmuxTaskRunner) run(task TaskSpec, timeoutSec int) TaskResult {
 	if task.Mode == "" {
 		task.Mode = "new"
 	}
-	if task.UseStdin || shouldUseStdin(task.Task, false) {
-		task.UseStdin = true
-	}
 
 	backendName := task.Backend
 	if backendName == "" {
@@ -159,6 +156,13 @@ func (r *tmuxTaskRunner) run(task TaskSpec, timeoutSec int) TaskResult {
 		result.ExitCode = 1
 		result.Error = err.Error()
 		return result
+	}
+
+	// Only use stdin if backend supports it
+	if backend.SupportsStdin() && (task.UseStdin || shouldUseStdin(task.Task, false)) {
+		task.UseStdin = true
+	} else {
+		task.UseStdin = false
 	}
 
 	target, err := r.prepareTarget(task)

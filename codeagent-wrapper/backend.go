@@ -13,27 +13,28 @@ type Backend interface {
 	Name() string
 	BuildArgs(cfg *Config, targetArg string) []string
 	Command() string
+	// SupportsStdin returns true if the backend can read input from stdin.
+	// If false, the prompt must be passed as a command line argument.
+	SupportsStdin() bool
 }
 
 type CodexBackend struct{}
 
-func (CodexBackend) Name() string { return "codex" }
-func (CodexBackend) Command() string {
-	return "codex"
-}
+func (CodexBackend) Name() string    { return "codex" }
+func (CodexBackend) Command() string { return "codex" }
 func (CodexBackend) BuildArgs(cfg *Config, targetArg string) []string {
 	return buildCodexArgs(cfg, targetArg)
 }
+func (CodexBackend) SupportsStdin() bool { return true }
 
 type ClaudeBackend struct{}
 
-func (ClaudeBackend) Name() string { return "claude" }
-func (ClaudeBackend) Command() string {
-	return "claude"
-}
+func (ClaudeBackend) Name() string    { return "claude" }
+func (ClaudeBackend) Command() string { return "claude" }
 func (ClaudeBackend) BuildArgs(cfg *Config, targetArg string) []string {
 	return buildClaudeArgs(cfg, targetArg)
 }
+func (ClaudeBackend) SupportsStdin() bool { return true }
 
 const maxClaudeSettingsBytes = 1 << 20 // 1MB
 
@@ -108,13 +109,12 @@ func buildClaudeArgs(cfg *Config, targetArg string) []string {
 
 type GeminiBackend struct{}
 
-func (GeminiBackend) Name() string { return "gemini" }
-func (GeminiBackend) Command() string {
-	return "gemini"
-}
+func (GeminiBackend) Name() string    { return "gemini" }
+func (GeminiBackend) Command() string { return "gemini" }
 func (GeminiBackend) BuildArgs(cfg *Config, targetArg string) []string {
 	return buildGeminiArgs(cfg, targetArg)
 }
+func (GeminiBackend) SupportsStdin() bool { return true }
 
 func buildGeminiArgs(cfg *Config, targetArg string) []string {
 	if cfg == nil {

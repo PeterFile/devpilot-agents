@@ -8,17 +8,40 @@ import (
 func TestKiroCliBackendBuildArgs(t *testing.T) {
 	backend := KiroCliBackend{}
 	cfg := &Config{WorkDir: "/tmp"}
-	args := backend.BuildArgs(cfg, "task")
-	expected := []string{"chat", "-C", "/tmp", "--json", "task"}
+	args := backend.BuildArgs(cfg, "hello world")
+	// Expected: chat --no-interactive --trust-all-tools -C /tmp "hello world"
+	expected := []string{"chat", "--no-interactive", "--trust-all-tools", "-C", "/tmp", "hello world"}
 	if !reflect.DeepEqual(args, expected) {
 		t.Fatalf("expected %v, got %v", expected, args)
 	}
 
 	cfg = &Config{WorkDir: "."}
-	args = backend.BuildArgs(cfg, "task")
-	expected = []string{"chat", "--json", "task"}
+	args = backend.BuildArgs(cfg, "test prompt")
+	// Expected: chat --no-interactive --trust-all-tools "test prompt"
+	expected = []string{"chat", "--no-interactive", "--trust-all-tools", "test prompt"}
 	if !reflect.DeepEqual(args, expected) {
 		t.Fatalf("expected %v, got %v", expected, args)
+	}
+
+	// Test with nil config
+	args = backend.BuildArgs(nil, "hello world")
+	expected = []string{"chat", "--no-interactive", "--trust-all-tools", "hello world"}
+	if !reflect.DeepEqual(args, expected) {
+		t.Fatalf("expected %v, got %v", expected, args)
+	}
+
+	// Test empty targetArg
+	args = backend.BuildArgs(nil, "")
+	expected = []string{"chat", "--no-interactive", "--trust-all-tools"}
+	if !reflect.DeepEqual(args, expected) {
+		t.Fatalf("expected %v, got %v", expected, args)
+	}
+}
+
+func TestKiroCliBackendSupportsStdin(t *testing.T) {
+	backend := KiroCliBackend{}
+	if backend.SupportsStdin() {
+		t.Fatal("KiroCliBackend should not support stdin")
 	}
 }
 

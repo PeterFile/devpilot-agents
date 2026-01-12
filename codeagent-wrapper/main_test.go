@@ -61,9 +61,10 @@ func (e errReader) Read([]byte) (int, error) {
 }
 
 type testBackend struct {
-	name    string
-	command string
-	argsFn  func(*Config, string) []string
+	name         string
+	command      string
+	argsFn       func(*Config, string) []string
+	supportsStdin bool
 }
 
 func (t testBackend) Name() string {
@@ -85,6 +86,10 @@ func (t testBackend) Command() string {
 		return t.command
 	}
 	return "echo"
+}
+
+func (t testBackend) SupportsStdin() bool {
+	return t.supportsStdin
 }
 
 func withBackend(command string, argsFn func(*Config, string) []string) func() {
