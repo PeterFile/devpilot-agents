@@ -8,8 +8,8 @@ The implementation follows a backend-first approach for API endpoints, then fron
 
 ## Tasks
 
-- [x] 1 Set up project structure and dependencies
-  - [x] 1.1 Initialize frontend project with Vite + React + TypeScript
+- [ ] 1 Set up project structure and dependencies
+  - [ ] 1.1 Initialize frontend project with Vite + React + TypeScript
     - Create `dashboard/frontend/` directory
     - Initialize with `npm create vite@latest . -- --template react-ts`
     - Install dependencies: tailwindcss, react-query, zustand, react-router-dom, reactflow
@@ -17,14 +17,14 @@ The implementation follows a backend-first approach for API endpoints, then fron
     - _Requirements: 1.1, 1.2, 1.3_
     - _writes: dashboard/frontend/package.json, dashboard/frontend/vite.config.ts, dashboard/frontend/tailwind.config.js_
 
-  - [x] 1.2 Initialize backend project with FastAPI
+  - [ ] 1.2 Initialize backend project with FastAPI
     - Create `dashboard/backend/` directory
     - Create `requirements.txt` with fastapi, uvicorn, watchdog, pydantic, websockets
     - Create basic `main.py` with FastAPI app
     - _Requirements: 7.1, 7.5_
     - _writes: dashboard/backend/requirements.txt, dashboard/backend/main.py_
 
-  - [x] 1.3 Create shared TypeScript types from AGENT_STATE schema
+  - [ ] 1.3 Create shared TypeScript types from AGENT_STATE schema
     - Create `dashboard/frontend/src/types/index.ts`
     - Define Task, AgentState, ReviewFinding, and related interfaces
     - Match types to `agent-state-schema.json`
@@ -32,7 +32,7 @@ The implementation follows a backend-first approach for API endpoints, then fron
     - _writes: dashboard/frontend/src/types/index.ts_
 
 - [ ] 2 Implement backend API endpoints
-  - [x] 2.1 Implement state service and file operations
+  - [ ] 2.1 Implement state service and file operations
     - Create `dashboard/backend/services/state_service.py`
     - Implement `load_state()` function to read AGENT_STATE.json
     - Implement schema validation using jsonschema
@@ -84,43 +84,42 @@ The implementation follows a backend-first approach for API endpoints, then fron
   - Verify endpoints work with sample AGENT_STATE.json
   - Ask the user if questions arise
 
-- [ ] 4 Implement frontend layout components
-  - [x] 4.1 Create Header component
-    - Display project name and session identifier
-    - Read session_name from state
-    - _Requirements: 1.1_
-    - _writes: dashboard/frontend/src/components/layout/Header.tsx_
+  - [x] 4 Implement frontend layout components
+    - [x] 4.1 Create Header component
+      - Display project name and session identifier
+      - Read session_name from state
+      - _Requirements: 1.1_
+      - _writes: dashboard/frontend/src/components/layout/Header.tsx_
 
-  - [ ] 4.2 Create Sidebar navigation component
-    - Create dedicated Sidebar.tsx component (currently inline in App.tsx)
-    - Navigation links: Overview, Tasks, Agents, Reviews, Graph
-    - Use react-router-dom for client-side routing
-    - Highlight active route
-    - _Requirements: 1.2, 1.3_
-    - _writes: dashboard/frontend/src/components/layout/Sidebar.tsx_
+    - [x] 4.2 Create Sidebar navigation component
+      - Create dedicated Sidebar.tsx component (currently inline in App.tsx)
+      - Navigation links: Overview, Tasks, Agents, Reviews, Graph
+      - Use react-router-dom for client-side routing
+      - Highlight active route
+      - _Requirements: 1.2, 1.3_
+      - _writes: dashboard/frontend/src/components/layout/Sidebar.tsx_
 
-  - [ ] 4.3 Create MainContent wrapper and App routing
-    - Set up React Router with routes for each view
-    - Implement responsive layout (1024px - 1920px)
-    - Refactor App.tsx to use proper routing
-    - _Requirements: 1.3, 1.4_
-    - _writes: dashboard/frontend/src/components/layout/MainContent.tsx, dashboard/frontend/src/App.tsx_
+    - [x] 4.3 Create MainContent wrapper and App routing
+      - Set up React Router with routes for each view
+      - Implement responsive layout (1024px - 1920px)
+      - Refactor App.tsx to use proper routing
+      - _Requirements: 1.3, 1.4_
+      - _writes: dashboard/frontend/src/components/layout/MainContent.tsx, dashboard/frontend/src/App.tsx_
 
-  - [ ] 4.4 Create common UI components
-    - SkeletonLoader for loading states
-    - ErrorMessage with retry button
-    - Toast for notifications
-    - Banner for status alerts
-    - _Requirements: 8.1, 8.2, 8.3, 8.4_
-    - _writes: dashboard/frontend/src/components/common/SkeletonLoader.tsx, dashboard/frontend/src/components/common/ErrorMessage.tsx, dashboard/frontend/src/components/common/Toast.tsx, dashboard/frontend/src/components/common/Banner.tsx_
+    - [x] 4.4 Create common UI components
+      - SkeletonLoader for loading states
+      - ErrorMessage with retry button
+      - Toast for notifications
+      - Banner for status alerts
+      - _Requirements: 8.1, 8.2, 8.3, 8.4_
+      - _writes: dashboard/frontend/src/components/common/SkeletonLoader.tsx, dashboard/frontend/src/components/common/ErrorMessage.tsx, dashboard/frontend/src/components/common/Toast.tsx, dashboard/frontend/src/components/common/Banner.tsx_
 
-  - [ ]* 4.5 Write property test for error display (Property 14)
-    - **Property 14: Error Display**
-    - **Validates: Requirements 8.2**
-    - _writes: dashboard/frontend/src/components/common/ErrorMessage.test.tsx_
-
+    - [x]* 4.5 Write property test for error display (Property 14)
+      - **Property 14: Error Display**
+      - **Validates: Requirements 8.2**
+      - _writes: dashboard/frontend/src/components/common/ErrorMessage.test.tsx_
 - [ ] 5 Implement task display components
-  - [x] 5.1 Create TaskStatusBadge component
+  - [ ] 5.1 Create TaskStatusBadge component
     - Color mapping: gray (not_started), blue (in_progress), yellow (pending_review), green (completed), red (blocked)
     - _Requirements: 2.4_
     - _writes: dashboard/frontend/src/components/tasks/TaskStatusBadge.tsx_
@@ -170,7 +169,7 @@ The implementation follows a backend-first approach for API endpoints, then fron
     - _writes: dashboard/frontend/src/components/tasks/TaskCard.test.tsx_
 
 - [ ] 6 Implement task list and filtering
-  - [x] 6.1 Create TaskFilter component
+  - [ ] 6.1 Create TaskFilter component
     - Filter by status dropdown
     - Filter by agent dropdown
     - Search input for text search
@@ -206,7 +205,7 @@ The implementation follows a backend-first approach for API endpoints, then fron
   - Ask the user if questions arise
 
 - [ ] 8 Implement agent status panel
-  - [x] 8.1 Create AgentIndicator component
+  - [ ] 8.1 Create AgentIndicator component
     - Show working/idle state with animation
     - Display agent type icon
     - _Requirements: 4.2_
@@ -225,7 +224,7 @@ The implementation follows a backend-first approach for API endpoints, then fron
     - _writes: dashboard/frontend/src/components/agents/AgentPanel.test.tsx_
 
 - [ ] 9 Implement dependency graph
-  - [x] 9.1 Create TaskNode component for React Flow
+  - [ ] 9.1 Create TaskNode component for React Flow
     - Custom node displaying task status and info
     - Click handler for navigation
     - _Requirements: 6.4_
@@ -245,7 +244,7 @@ The implementation follows a backend-first approach for API endpoints, then fron
     - _writes: dashboard/frontend/src/components/graph/DependencyGraph.test.tsx_
 
 - [ ] 10 Implement real-time updates
-  - [x] 10.1 Create useWebSocket hook
+  - [ ] 10.1 Create useWebSocket hook
     - Connect to /ws/status endpoint
     - Handle connection, disconnection, reconnection
     - Exponential backoff for reconnection
@@ -268,7 +267,7 @@ The implementation follows a backend-first approach for API endpoints, then fron
     - _writes: dashboard/frontend/src/App.tsx_
 
 - [ ] 11 Implement view pages
-  - [x] 11.1 Create Overview page
+  - [ ] 11.1 Create Overview page
     - Summary statistics
     - Recent activity
     - Quick status panel
