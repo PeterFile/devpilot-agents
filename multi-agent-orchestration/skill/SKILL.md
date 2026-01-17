@@ -99,9 +99,10 @@ WHILE there are tasks not in "completed" status:
     1. Dispatch ready tasks
     2. Wait for completion
     3. Dispatch reviews for completed tasks
-    4. Sync state to PULSE
-    5. Check if all tasks completed
-    6. If not complete, CONTINUE LOOP
+    4. Consolidate reviews (final reports / fix loop)
+    5. Sync state to PULSE
+    6. Check if all tasks completed
+    7. If not complete, CONTINUE LOOP
 ```
 
 #### 2a. Dispatch Ready Tasks
@@ -124,15 +125,25 @@ python multi-agent-orchestration/skill/scripts/dispatch_reviews.py AGENT_STATE.j
 This:
 - Finds tasks in "pending_review" status
 - Spawns Codex reviewers
-- Updates task statuses to "under_review" then "completed"
+- Updates task statuses to "under_review" then "final_review"
 
-#### 2c. Sync to PULSE
+#### 2c. Consolidate Reviews
+
+```bash
+python multi-agent-orchestration/skill/scripts/consolidate_reviews.py AGENT_STATE.json
+```
+
+This:
+- Consolidates `review_findings` into `final_reports`
+- Updates task statuses to "completed" (or enters "fix_required" for the fix loop)
+
+#### 2d. Sync to PULSE
 
 ```bash
 python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
 ```
 
-#### 2d. Check Completion Status
+#### 2e. Check Completion Status
 
 ```bash
 # Check if any tasks are NOT completed
@@ -183,6 +194,12 @@ If dispatch_reviews.py fails:
 1. Log the error
 2. Continue with next review cycle
 3. Report unreviewed tasks in final summary
+
+### Consolidation Failure
+If consolidate_reviews.py fails:
+1. Log the error
+2. Retry once, then continue loop
+3. Report tasks stuck in "final_review" in final summary
 
 ### Blocked Tasks
 If tasks are blocked:
@@ -277,6 +294,9 @@ User: "Start orchestration from spec at .kiro/specs/orchestration-dashboard"
 > python dispatch_reviews.py AGENT_STATE.json
 ✅ Dispatched 3 reviews
 
+> python consolidate_reviews.py AGENT_STATE.json
+✅ Consolidated 3 final report(s)
+
 > python sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
 ✅ PULSE updated
 
@@ -302,6 +322,8 @@ Duration: ~15 minutes
 - `init_orchestration.py` - Parse/validate spec and scaffold TASKS_PARSED.json + AGENT_STATE.json
 - `dispatch_batch.py` - Dispatch ready tasks to workers
 - `dispatch_reviews.py` - Dispatch review tasks
+- `consolidate_reviews.py` - Consolidate review findings into final reports (and trigger fix loop)
+- `fix_loop.py` - Fix loop logic for tasks marked fix_required
 - `sync_pulse.py` - Sync state to PULSE document
 - `spec_parser.py` - Parse tasks.md
 

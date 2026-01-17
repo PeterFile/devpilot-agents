@@ -70,6 +70,8 @@ After dispatch completes:
 
 !`python multi-agent-orchestration/skill/scripts/dispatch_reviews.py ${state_file}`
 
+!`python multi-agent-orchestration/skill/scripts/consolidate_reviews.py ${state_file}`
+
 !`python multi-agent-orchestration/skill/scripts/sync_pulse.py ${state_file} ${pulse_file}`
 
 Check completion:

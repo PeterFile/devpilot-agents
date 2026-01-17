@@ -104,6 +104,12 @@ Dispatch reviews for completed dispatch units:
 python multi-agent-orchestration/skill/scripts/dispatch_reviews.py <state_file>
 ```
 
+Consolidate review findings into final reports, and advance tasks to `completed` (or `fix_required` for the fix loop):
+
+```bash
+python multi-agent-orchestration/skill/scripts/consolidate_reviews.py <state_file>
+```
+
 Sync state to PULSE:
 
 ```bash

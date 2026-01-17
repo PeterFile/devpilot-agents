@@ -59,7 +59,10 @@ python multi-agent-orchestration/skill/scripts/dispatch_batch.py AGENT_STATE.jso
 # Step 4: Dispatch reviews
 python multi-agent-orchestration/skill/scripts/dispatch_reviews.py AGENT_STATE.json
 
-# Step 5: Sync status
+# Step 5: Consolidate reviews (final reports / fix loop)
+python multi-agent-orchestration/skill/scripts/consolidate_reviews.py AGENT_STATE.json
+
+# Step 6: Sync status
 python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
 ```
 
