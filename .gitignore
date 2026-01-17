@@ -10,3 +10,5 @@ coverage.out
 .hypothesis
 node_modules/
 dist/
+bin/
+claude_skills/
