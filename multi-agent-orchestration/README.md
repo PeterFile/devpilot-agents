@@ -14,11 +14,10 @@ multi-agent-orchestration/
 │   └── orchestrate.md      # /prompts:orchestrate command
 ├── commands/               # Claude Code commands
 │   └── orchestrate.md      # /orchestrate command
-├── docs/                   # Documentation
+└── docs/                   # Documentation
 │   ├── usage.md
 │   ├── workflow-simulation.md
 │   └── review.md
-└── specs/                  # Kiro spec documents
 ```
 
 ## Quick Start
@@ -65,6 +64,12 @@ python multi-agent-orchestration/skill/scripts/consolidate_reviews.py AGENT_STAT
 
 # Step 6: Sync status
 python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
+```
+
+### Ralph-style Loop Runner (No Click)
+
+```bash
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --backend codex
 ```
 
 ## Prerequisites

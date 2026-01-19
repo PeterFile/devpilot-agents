@@ -25,6 +25,29 @@ python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path>
 - TASKS_PARSED.json
 - PROJECT_PULSE.md
 
+### 1b) 自动循环（Ralph-style，推荐）
+
+该脚本每轮会启动一次全新的 orchestrator（LLM，通过 `codeagent-wrapper`），读取：
+- AGENT_STATE.json
+- PROJECT_PULSE.md
+- TASKS_PARSED.json（可选，但建议提供）
+
+然后由 orchestrator 决定本轮动作（dispatch/review/fix/重新分配/停机），并输出 `COMPLETE/CONTINUE`（JSON）。
+
+从 spec 一键启动：
+
+```bash
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --backend codex --max-iterations 50 --sleep 1
+```
+
+从已有 state 恢复：
+
+```bash
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGENT_STATE.json --pulse PROJECT_PULSE.md --tasks TASKS_PARSED.json --workdir .
+```
+
+🔒 安全提示：该循环会自动执行 `codeagent-wrapper` 和任务脚本，可能修改大量文件；建议先在独立分支运行。
+
 ### 2) 填写调度决策
 
 只为 **Dispatch Unit** 填写字段（有 subtasks 的 parent task，或无 parent 且无 subtasks 的 standalone task）。
@@ -102,7 +125,7 @@ python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PR
 检查是否完成（未完成则重复调度循环）：
 
 ```bash
-python -c "import json; d=json.load(open('AGENT_STATE.json')); tasks=d['tasks']; incomplete=[t for t in tasks if t.get('status')!='completed']; print(f'Incomplete: {len(incomplete)}/{len(tasks)}')"
+python -c "import json; d=json.load(open('AGENT_STATE.json')); tasks=d.get('tasks',[]); units=[t for t in tasks if t.get('subtasks') or (not t.get('parent_id') and not t.get('subtasks'))]; incomplete=[t for t in units if t.get('status')!='completed']; print(f'Incomplete dispatch units: {len(incomplete)}/{len(units)}')"
 ```
 
 ## 并行执行规则

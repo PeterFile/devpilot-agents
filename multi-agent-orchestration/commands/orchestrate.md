@@ -113,7 +113,7 @@ After dispatch completes:
 
 Check completion:
 
-!`python -c "import json; d=json.load(open('${state_file}')); tasks=d['tasks']; incomplete=[t['task_id'] for t in tasks if t.get('status')!='completed']; print(f'Incomplete: {len(incomplete)}/{len(tasks)}'); [print(f'  - {tid}: {t.get(\"status\")}') for tid,t in [(t['task_id'],t) for t in tasks if t.get('status')!='completed'][:5]]"`
+!`python -c "import json; d=json.load(open('${state_file}')); tasks=d.get('tasks',[]); units=[t for t in tasks if t.get('subtasks') or (not t.get('parent_id') and not t.get('subtasks'))]; incomplete=[t for t in units if t.get('status')!='completed']; print(f'Incomplete dispatch units: {len(incomplete)}/{len(units)}'); [print(f\\\"  - {t.get('task_id')}: {t.get('status')}\\\") for t in incomplete[:5]]"`
 
 **Decision:**
 - If incomplete > 0: REPEAT Step 3

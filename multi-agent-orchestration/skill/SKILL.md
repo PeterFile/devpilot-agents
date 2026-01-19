@@ -126,7 +126,7 @@ Then write `PROJECT_PULSE.md` using design.md and current state.
 **CRITICAL: This is a LOOP. Continue dispatching until no tasks remain.**
 
 ```
-WHILE there are tasks not in "completed" status:
+WHILE there are dispatch units not in "completed" status:
     1. Dispatch ready tasks
     2. Wait for completion
     3. Dispatch reviews for completed tasks
@@ -178,7 +178,7 @@ python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PR
 
 ```bash
 # Check if any tasks are NOT completed
-cat AGENT_STATE.json | python -c "import json,sys; d=json.load(sys.stdin); tasks=d.get('tasks',[]); incomplete=[t['task_id'] for t in tasks if t.get('status')!='completed']; print(f'Incomplete: {len(incomplete)}'); [print(f'  - {tid}') for tid in incomplete[:5]]"
+cat AGENT_STATE.json | python -c "import json,sys; d=json.load(sys.stdin); tasks=d.get('tasks',[]); units=[t for t in tasks if t.get('subtasks') or (not t.get('parent_id') and not t.get('subtasks'))]; incomplete=[t['task_id'] for t in units if t.get('status')!='completed']; print(f'Incomplete dispatch units: {len(incomplete)}/{len(units)}'); [print(f'  - {tid}') for tid in incomplete[:5]]"
 ```
 
 **Decision Point:**
