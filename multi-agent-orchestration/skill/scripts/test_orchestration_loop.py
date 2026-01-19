@@ -89,3 +89,76 @@ def test_validate_decision_rejects_unknown_action():
     with pytest.raises(ValueError):
         loop._validate_decision({"decision": "CONTINUE", "actions": [{"type": "rm_rf"}]})
 
+
+def test_exit_code_from_state_returns_0_when_complete():
+    assert loop._exit_code_from_state({"tasks": [{"task_id": "1", "status": "completed"}]}) == 0
+
+
+def test_exit_code_from_state_returns_2_when_pending_decisions():
+    assert loop._exit_code_from_state({"pending_decisions": [{"id": "d1"}], "tasks": []}) == 2
+
+
+def test_run_loop_llm_returns_2_without_calling_orchestrator_when_pending_decisions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    state_path = tmp_path / "AGENT_STATE.json"
+    pulse_path = tmp_path / "PROJECT_PULSE.md"
+    state_path.write_text('{"pending_decisions":[{"id":"d1","task_id":"1"}],"tasks":[{"task_id":"1","status":"not_started"}]}', encoding="utf-8")
+    pulse_path.write_text("# pulse\n", encoding="utf-8")
+
+    def _nope(*_args, **_kwargs):
+        raise AssertionError("_call_orchestrator should not be called when pending_decisions exists")
+
+    monkeypatch.setattr(loop, "_call_orchestrator", _nope)
+
+    paths = loop.RunnerPaths(state_file=state_path, tasks_file=None, pulse_file=pulse_path)
+    rc = loop.run_loop_llm(
+        backend="codex",
+        assign_backend="codex",
+        paths=paths,
+        workdir=tmp_path,
+        max_iterations=1,
+        sleep_seconds=0,
+        max_actions=1,
+    )
+    assert rc == 2
+
+
+def test_run_loop_llm_complete_requires_all_dispatch_units_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    state_path = tmp_path / "AGENT_STATE.json"
+    pulse_path = tmp_path / "PROJECT_PULSE.md"
+    loop._write_json(state_path, {"tasks": [{"task_id": "1", "status": "not_started"}]})
+    pulse_path.write_text("# pulse\n", encoding="utf-8")
+
+    monkeypatch.setattr(loop, "_call_orchestrator", lambda **_kwargs: {"decision": "COMPLETE", "actions": [], "notes": "stop"})
+
+    paths = loop.RunnerPaths(state_file=state_path, tasks_file=None, pulse_file=pulse_path)
+    rc = loop.run_loop_llm(
+        backend="codex",
+        assign_backend="codex",
+        paths=paths,
+        workdir=tmp_path,
+        max_iterations=1,
+        sleep_seconds=0,
+        max_actions=1,
+    )
+    assert rc == 1
+
+
+def test_run_loop_llm_halt_action_returns_1_when_incomplete(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    state_path = tmp_path / "AGENT_STATE.json"
+    pulse_path = tmp_path / "PROJECT_PULSE.md"
+    loop._write_json(state_path, {"tasks": [{"task_id": "1", "status": "not_started"}]})
+    pulse_path.write_text("# pulse\n", encoding="utf-8")
+
+    monkeypatch.setattr(loop, "_call_orchestrator", lambda **_kwargs: {"decision": "CONTINUE", "actions": [{"type": "halt"}], "notes": "need human"})
+
+    paths = loop.RunnerPaths(state_file=state_path, tasks_file=None, pulse_file=pulse_path)
+    rc = loop.run_loop_llm(
+        backend="codex",
+        assign_backend="codex",
+        paths=paths,
+        workdir=tmp_path,
+        max_iterations=1,
+        sleep_seconds=0,
+        max_actions=1,
+    )
+    assert rc == 1

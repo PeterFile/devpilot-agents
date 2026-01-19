@@ -171,7 +171,7 @@ def _build_orchestrator_prompt(
         "- halt: stop the loop (use when pending_decisions requires human input, or unrecoverable error)",
         "",
         "Rules:",
-        "- If pending_decisions is non-empty: choose decision COMPLETE and include a single halt action.",
+        "- If pending_decisions is non-empty: choose decision CONTINUE and include a single halt action.",
         "- If any dispatch unit is not_started and missing owner_agent: include assign_dispatch before dispatch_batch.",
         "- If fix_required tasks exist: dispatch_batch may be used (it handles fix loop dispatch).",
         "- Always include sync_pulse after any action that changes AGENT_STATE.json.",
@@ -187,6 +187,15 @@ def _build_orchestrator_prompt(
         "}",
     ]
     return "\n".join(lines) + "\n"
+
+
+def _exit_code_from_state(state: Dict[str, Any]) -> int:
+    if _pending_decisions(state):
+        return 2
+    incomplete, total = _dispatch_unit_completion(state)
+    if total == 0 or incomplete == 0:
+        return 0
+    return 1
 
 
 def _call_orchestrator(
@@ -374,6 +383,11 @@ def run_loop_llm(
     print(f"[loop] workdir={workdir}")
 
     for iteration in range(1, max_iterations + 1):
+        state = _read_json(paths.state_file)
+        if _pending_decisions(state):
+            _print_pending_decisions(state)
+            return 2
+
         decision = _call_orchestrator(
             backend=backend,
             paths=paths,
@@ -388,9 +402,15 @@ def run_loop_llm(
         if d == "COMPLETE":
             state = _read_json(paths.state_file)
             incomplete, total = _dispatch_unit_completion(state)
-            print(f"[loop] COMPLETE: {notes}")
+            exit_code = _exit_code_from_state(state)
+            if exit_code == 0:
+                print(f"[loop] COMPLETE: {notes}")
+            else:
+                print(f"[loop] HALT: {notes}")
             print(f"[loop] dispatch_units incomplete={incomplete}/{total}")
-            return 0
+            if exit_code == 2:
+                _print_pending_decisions(state)
+            return exit_code
 
         action_list = ", ".join(a["type"] for a in actions) if actions else "(none)"
         print(f"[loop] iteration={iteration} decision=CONTINUE actions={action_list}")
@@ -401,8 +421,15 @@ def run_loop_llm(
             t = action["type"]
             if t == "halt":
                 recent_events.append({"iteration": iteration, "action": t, "success": True})
-                print("[loop] HALT")
-                return 0
+                state = _read_json(paths.state_file)
+                exit_code = _exit_code_from_state(state)
+                if exit_code == 0:
+                    print("[loop] COMPLETE")
+                else:
+                    print("[loop] HALT")
+                if exit_code == 2:
+                    _print_pending_decisions(state)
+                return exit_code
 
             if t == "assign_dispatch":
                 prompt = _build_assignment_prompt(paths)
@@ -462,9 +489,15 @@ def run_loop_llm(
                 continue
 
         state = _read_json(paths.state_file)
+        if _pending_decisions(state):
+            _print_pending_decisions(state)
+            return 2
         incomplete, total = _dispatch_unit_completion(state)
         recent_events.append({"iteration": iteration, "dispatch_units": {"incomplete": incomplete, "total": total}})
         print(f"[loop] dispatch_units incomplete={incomplete}/{total}")
+        if total == 0 or incomplete == 0:
+            print("[loop] COMPLETE")
+            return 0
 
         if sleep_seconds > 0:
             time.sleep(sleep_seconds)

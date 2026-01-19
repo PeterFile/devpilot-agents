@@ -66,11 +66,24 @@ python multi-agent-orchestration/skill/scripts/consolidate_reviews.py AGENT_STAT
 python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
 ```
 
-### Ralph-style Loop Runner (No Click)
+### One-Command Loop Runner (Recommended)
 
 ```bash
 python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --mode deterministic --backend codex --assign-backend codex
 ```
+
+### Ralph-style Loop Runner (LLM Mode)
+
+Each iteration spawns a fresh orchestrator (via `codeagent-wrapper`) which decides the next actions.
+
+```bash
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --mode llm --backend codex --assign-backend codex
+```
+
+Exit codes:
+- `0`: all dispatch units completed
+- `1`: halted/incomplete/max iterations/no progress
+- `2`: `pending_decisions` present (human input required)
 
 ## Prerequisites
 

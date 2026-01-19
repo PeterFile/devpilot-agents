@@ -67,6 +67,10 @@ This command will:
 - Loop dispatch → review → consolidate → sync until all dispatch units are completed
 - Halt if `pending_decisions` requires human input
 
+Exit codes: `0` complete, `1` halted/incomplete, `2` `pending_decisions` (human input required).
+
+Advanced: `--mode llm` for Ralph-style per-iteration orchestrator (fresh context each tick).
+
 Use the manual steps below only for debugging.
 
 ### Step 1: Initialize Orchestration [AUTOMATIC]
