@@ -69,7 +69,7 @@ python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PR
 ### Ralph-style Loop Runner (No Click)
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --backend codex
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --mode deterministic --backend codex --assign-backend codex
 ```
 
 ## Prerequisites

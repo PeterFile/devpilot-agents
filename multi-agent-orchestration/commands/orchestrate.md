@@ -8,123 +8,13 @@ allowed-tools: Bash(*), Read, Write, Edit
 
 Orchestrating spec at: $1
 
-## Step 1: Initialize [MANDATORY]
+## One-Command Mode [MANDATORY]
 
-!`python multi-agent-orchestration/skill/scripts/init_orchestration.py $1 --session orchestration --mode codex --json`
+!`python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec $1 --workdir . --mode deterministic --backend codex --assign-backend codex`
 
-Parse the JSON output above. If `success` is false, STOP and report the error.
+Wait for the command to finish. Then report:
 
-Extract from output:
-- `state_file`: Path to AGENT_STATE.json
-- `tasks_file`: Path to TASKS_PARSED.json  
-- `pulse_file`: Path to PROJECT_PULSE.md
-
-## Step 2: Codex Decision [MANDATORY - DO NOT SKIP]
-
-Read the scaffolded state file and tasks file:
-
-@${state_file}
-@${tasks_file}
-
-**YOU MUST NOW:**
-
-1. Generate dispatch assignments via `codeagent-wrapper` (MANDATORY):
-
-```bash
-codeagent-wrapper --backend codex - <<'EOF'
-You are generating dispatch assignments for multi-agent orchestration.
-
-Inputs:
-- @${state_file}
-- @${tasks_file}
-
-Rules:
-- Only assign Dispatch Units (parent tasks or standalone tasks).
-- Do NOT assign leaf tasks with parents.
-- owner_agent: codex | gemini | codex-review
-- target_window: task-<task_id> or grouped names (max 9)
-- criticality: standard | complex | security-sensitive
-- writes/reads: list of files (best-effort)
-
-Output JSON only:
-{
-  "dispatch_units": [
-    {
-      "task_id": "1",
-      "owner_agent": "codex",
-      "target_window": "task-1",
-      "criticality": "standard",
-      "writes": ["src/example.py"],
-      "reads": ["src/config.py"]
-    }
-  ],
-  "window_mapping": {
-    "1": "task-1"
-  }
-}
-EOF
-```
-
-2. Apply the JSON results into AGENT_STATE.json (Write tool).
-
-3. For each task in AGENT_STATE.json, ensure these fields are filled in:
-   - `owner_agent`: Choose `codex` (code), `gemini` (UI), or `codex-review` (review)
-   - `target_window`: Group related tasks (max 9 windows, e.g., "setup", "backend", "frontend")
-   - `criticality`: Set to `standard`, `complex`, or `security-sensitive`       
-
-4. Update PROJECT_PULSE.md with Mental Model from design.md.
-
-**Example task assignment:**
-```json
-{
-  "task_id": "1.1",
-  "owner_agent": "codex",
-  "target_window": "setup",
-  "criticality": "standard",
-  ...
-}
-```
-
-**Window grouping strategy:**
-- Tasks 1.x → "setup" (initialization)
-- Tasks 2.x → "backend" (API/services)
-- Tasks 4.x-6.x → "frontend" (UI components)
-- Checkpoints → "verify" (validation tasks)
-
-After updating AGENT_STATE.json, verify with:
-
-!`python -c "import json; d=json.load(open('${state_file}')); missing=[t['task_id'] for t in d['tasks'] if not t.get('owner_agent') or not t.get('target_window')]; print(f'Missing assignments: {len(missing)}'); [print(f'  - {tid}') for tid in missing[:5]]"`
-
-If any tasks are missing assignments, fix them before proceeding.
-
-## Step 3: Dispatch Loop [MANDATORY - REPEAT UNTIL COMPLETE]
-
-!`python multi-agent-orchestration/skill/scripts/dispatch_batch.py ${state_file}`
-
-If dispatch fails with "missing owner_agent", go back to Step 2.
-
-After dispatch completes:
-
-!`python multi-agent-orchestration/skill/scripts/dispatch_reviews.py ${state_file}`
-
-!`python multi-agent-orchestration/skill/scripts/consolidate_reviews.py ${state_file}`
-
-!`python multi-agent-orchestration/skill/scripts/sync_pulse.py ${state_file} ${pulse_file}`
-
-Check completion:
-
-!`python -c "import json; d=json.load(open('${state_file}')); tasks=d.get('tasks',[]); units=[t for t in tasks if t.get('subtasks') or (not t.get('parent_id') and not t.get('subtasks'))]; incomplete=[t for t in units if t.get('status')!='completed']; print(f'Incomplete dispatch units: {len(incomplete)}/{len(units)}'); [print(f\\\"  - {t.get('task_id')}: {t.get('status')}\\\") for t in incomplete[:5]]"`
-
-**Decision:**
-- If incomplete > 0: REPEAT Step 3
-- If incomplete == 0: PROCEED to Step 4
-
-## Step 4: Summary [MANDATORY]
-
-Report orchestration results:
-
-1. Total tasks completed
-2. Key files changed
-3. Any review findings or issues
-4. Duration estimate
+- Completion status (all dispatch units completed, or halted for human input)
+- Key files changed
+- Review findings summary
 

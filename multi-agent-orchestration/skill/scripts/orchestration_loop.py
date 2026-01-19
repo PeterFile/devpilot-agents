@@ -2,11 +2,16 @@
 """
 Orchestration Loop Runner
 
-Runs a Ralph-style loop for the multi-agent orchestration workflow:
+Runs an automated loop for the multi-agent orchestration workflow.
+
+Default mode is deterministic:
+- Ensure dispatch assignments exist (owner_agent/target_window/criticality/writes/reads)
+- Dispatch tasks, dispatch reviews, consolidate reviews, sync pulse
+- Repeat until all dispatch units are completed or human input is required
+
+Optional mode (llm) is Ralph-style:
 - Each iteration starts a fresh orchestrator (LLM) via codeagent-wrapper
-- The orchestrator reads AGENT_STATE.json / PROJECT_PULSE.md (and optionally TASKS_PARSED.json)
-- The orchestrator outputs a machine-readable decision: COMPLETE or CONTINUE
-- The runner executes the decided actions (dispatch/review/fix/assign/sync)
+- The orchestrator decides the next actions and outputs JSON (COMPLETE/CONTINUE)
 """
 
 from __future__ import annotations
@@ -105,6 +110,27 @@ def _dispatch_unit_completion(state: Dict[str, Any]) -> Tuple[int, int]:
     units = [t for t in tasks if _is_dispatch_unit(t)]
     incomplete = [t for t in units if t.get("status") != "completed"]
     return len(incomplete), len(units)
+
+
+def _pending_decisions(state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    decisions = state.get("pending_decisions") or []
+    return decisions if isinstance(decisions, list) else []
+
+
+def _missing_owner_agents(state: Dict[str, Any]) -> List[str]:
+    missing: List[str] = []
+    for task in state.get("tasks", []):
+        if not isinstance(task, dict):
+            continue
+        if not _is_dispatch_unit(task):
+            continue
+        if task.get("is_optional", False):
+            continue
+        if not task.get("owner_agent"):
+            tid = task.get("task_id")
+            if tid:
+                missing.append(str(tid))
+    return missing
 
 
 def _build_orchestrator_prompt(
@@ -219,6 +245,58 @@ def _build_assignment_prompt(paths: RunnerPaths) -> str:
     )
 
 
+def _fallback_assign_dispatch(state_path: Path) -> None:
+    state = _read_json(state_path)
+    for task in state.get("tasks", []):
+        if not isinstance(task, dict):
+            continue
+        if not _is_dispatch_unit(task):
+            continue
+        if task.get("is_optional", False):
+            continue
+        if task.get("owner_agent"):
+            continue
+        t = str(task.get("type") or "code")
+        if t == "ui":
+            task["owner_agent"] = "gemini"
+        elif t == "review":
+            task["owner_agent"] = "codex-review"
+        else:
+            task["owner_agent"] = "codex"
+    _write_json(state_path, state)
+
+
+def _ensure_assignments(
+    *,
+    assign_backend: str,
+    paths: RunnerPaths,
+    workdir: Path,
+) -> None:
+    state = _read_json(paths.state_file)
+    if _pending_decisions(state):
+        return
+    missing = _missing_owner_agents(state)
+    if not missing:
+        return
+
+    if not paths.tasks_file:
+        _fallback_assign_dispatch(paths.state_file)
+        return
+
+    prompt = _build_assignment_prompt(paths)
+    code, stdout, stderr = _run(
+        ["codeagent-wrapper", "--backend", assign_backend, "-"],
+        input_text=prompt,
+        cwd=workdir,
+    )
+    if code != 0:
+        raise RuntimeError(f"assign_dispatch failed (exit {code}): {stderr.strip() or stdout.strip()}")
+    assignments = _json_from_text(stdout)
+    if not isinstance(assignments, dict):
+        raise ValueError("assign_dispatch output is not a JSON object")
+    _apply_assignments(paths.state_file, assignments)
+
+
 def _apply_assignments(state_path: Path, assignments: Dict[str, Any]) -> Dict[str, Any]:
     state = _read_json(state_path)
     tasks = state.get("tasks", [])
@@ -276,7 +354,7 @@ def _validate_decision(decision: Dict[str, Any]) -> Tuple[str, List[Dict[str, An
     return d, normalized, notes
 
 
-def run_loop(
+def run_loop_llm(
     *,
     backend: str,
     assign_backend: str,
@@ -394,6 +472,118 @@ def run_loop(
     return 1
 
 
+def _print_pending_decisions(state: Dict[str, Any]) -> None:
+    decisions = _pending_decisions(state)
+    if not decisions:
+        return
+    print("[loop] pending_decisions detected; human input required")
+    for d in decisions[:5]:
+        tid = d.get("task_id")
+        did = d.get("id")
+        prio = d.get("priority")
+        print(f"[loop] - id={did} task_id={tid} priority={prio}")
+
+
+def run_loop_deterministic(
+    *,
+    assign_backend: str,
+    paths: RunnerPaths,
+    workdir: Path,
+    max_iterations: int,
+    sleep_seconds: float,
+) -> int:
+    scripts_dir = Path(__file__).parent
+
+    print(f"[loop] state_file={paths.state_file}")
+    print(f"[loop] pulse_file={paths.pulse_file}")
+    if paths.tasks_file:
+        print(f"[loop] tasks_file={paths.tasks_file}")
+    print(f"[loop] workdir={workdir}")
+
+    _ensure_assignments(assign_backend=assign_backend, paths=paths, workdir=workdir)
+
+    last_incomplete: Optional[int] = None
+    stagnant_rounds = 0
+
+    for iteration in range(1, max_iterations + 1):
+        state = _read_json(paths.state_file)
+        if _pending_decisions(state):
+            _print_pending_decisions(state)
+            return 2
+
+        missing = _missing_owner_agents(state)
+        if missing:
+            print(f"[loop] missing owner_agent for dispatch units: {', '.join(missing[:10])}")
+            _ensure_assignments(assign_backend=assign_backend, paths=paths, workdir=workdir)
+
+        payload = _run_python_script(
+            scripts_dir / "dispatch_batch.py",
+            [str(paths.state_file), "--workdir", str(workdir)],
+            cwd=workdir,
+        )
+        if not payload.get("success"):
+            msg = str(payload.get("message") or "")
+            if "Missing required dispatch fields" in msg:
+                _ensure_assignments(assign_backend=assign_backend, paths=paths, workdir=workdir)
+                payload = _run_python_script(
+                    scripts_dir / "dispatch_batch.py",
+                    [str(paths.state_file), "--workdir", str(workdir)],
+                    cwd=workdir,
+                )
+            else:
+                print(f"[loop] dispatch_batch failed: {msg}")
+        else:
+            print(f"[loop] dispatch_batch: {payload.get('message')}")
+
+        payload = _run_python_script(
+            scripts_dir / "dispatch_reviews.py",
+            [str(paths.state_file), "--workdir", str(workdir)],
+            cwd=workdir,
+        )
+        print(f"[loop] dispatch_reviews: {payload.get('message')}")
+
+        payload = _run_python_script(
+            scripts_dir / "consolidate_reviews.py",
+            [str(paths.state_file)],
+            cwd=workdir,
+        )
+        print(f"[loop] consolidate_reviews: {payload.get('message')}")
+
+        payload = _run_python_script(
+            scripts_dir / "sync_pulse.py",
+            [str(paths.state_file), str(paths.pulse_file)],
+            cwd=workdir,
+        )
+        print(f"[loop] sync_pulse: {payload.get('message')}")
+
+        state = _read_json(paths.state_file)
+        if _pending_decisions(state):
+            _print_pending_decisions(state)
+            return 2
+
+        incomplete, total = _dispatch_unit_completion(state)
+        print(f"[loop] iteration={iteration} dispatch_units incomplete={incomplete}/{total}")
+        if total == 0 or incomplete == 0:
+            print("[loop] COMPLETE")
+            return 0
+
+        if last_incomplete is not None and incomplete >= last_incomplete:
+            stagnant_rounds += 1
+        else:
+            stagnant_rounds = 0
+        last_incomplete = incomplete
+
+        if stagnant_rounds >= 5:
+            print("[loop] no progress for 5 rounds; stopping")
+            return 1
+
+        if sleep_seconds > 0:
+            time.sleep(sleep_seconds)
+
+    print("[loop] reached max iterations")
+    return 1
+
+
 def _init_from_spec(spec_path: Path, *, session_name: str, cwd: Path) -> RunnerPaths:
     scripts_dir = Path(__file__).parent
     payload = _run_python_script(
@@ -407,7 +597,7 @@ def _init_from_spec(spec_path: Path, *, session_name: str, cwd: Path) -> RunnerP
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Run a Ralph-style orchestration loop")
+    parser = argparse.ArgumentParser(description="Run an orchestration loop")
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--spec", help="Spec directory (requirements.md/design.md/tasks.md)", type=str)
     src.add_argument("--state", help="Path to AGENT_STATE.json", type=str)
@@ -420,9 +610,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--max-iterations", default=50, type=int)
     parser.add_argument("--sleep", default=1.0, type=float)
     parser.add_argument("--max-actions", default=6, type=int)
+    parser.add_argument("--mode", choices=["deterministic", "llm"], default="deterministic", type=str)
 
     args = parser.parse_args(argv)
     workdir = Path(args.workdir).resolve()
+
+    if sys.platform.startswith("win") and "CODEAGENT_NO_TMUX" not in os.environ:
+        os.environ["CODEAGENT_NO_TMUX"] = "1"
 
     if args.spec:
         paths = _init_from_spec(Path(args.spec), session_name=args.session, cwd=workdir)
@@ -432,14 +626,23 @@ def main(argv: Optional[List[str]] = None) -> int:
         pulse_file = Path(args.pulse).resolve() if args.pulse else None
         paths = _infer_paths(state_file, tasks_file, pulse_file)
 
-    return run_loop(
-        backend=args.backend,
+    if args.mode == "llm":
+        return run_loop_llm(
+            backend=args.backend,
+            assign_backend=args.assign_backend,
+            paths=paths,
+            workdir=workdir,
+            max_iterations=args.max_iterations,
+            sleep_seconds=args.sleep,
+            max_actions=args.max_actions,
+        )
+
+    return run_loop_deterministic(
         assign_backend=args.assign_backend,
         paths=paths,
         workdir=workdir,
         max_iterations=args.max_iterations,
         sleep_seconds=args.sleep,
-        max_actions=args.max_actions,
     )
 
 

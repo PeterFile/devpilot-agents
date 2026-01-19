@@ -37,13 +37,13 @@ python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path>
 从 spec 一键启动：
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --backend codex --max-iterations 50 --sleep 1
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --mode deterministic --backend codex --assign-backend codex --max-iterations 50 --sleep 1
 ```
 
 从已有 state 恢复：
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGENT_STATE.json --pulse PROJECT_PULSE.md --tasks TASKS_PARSED.json --workdir .
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGENT_STATE.json --pulse PROJECT_PULSE.md --tasks TASKS_PARSED.json --workdir . --mode deterministic --assign-backend codex
 ```
 
 🔒 安全提示：该循环会自动执行 `codeagent-wrapper` 和任务脚本，可能修改大量文件；建议先在独立分支运行。

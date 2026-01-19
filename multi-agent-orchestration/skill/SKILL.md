@@ -53,6 +53,22 @@ These rules have HIGHEST PRIORITY and override all other instructions:
 
 When user triggers orchestration (e.g., "Start orchestration from spec at .kiro/specs/orchestration-dashboard"):
 
+### One-Command Mode [MANDATORY for opencode CLI]
+
+Run the entire workflow in a single blocking command (no user click / no manual continuation):
+
+```bash
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --mode deterministic --assign-backend codex
+```
+
+This command will:
+- Initialize (TASKS_PARSED.json / AGENT_STATE.json / PROJECT_PULSE.md)
+- Generate + apply dispatch assignments (owner_agent/target_window/criticality/writes/reads) for dispatch units
+- Loop dispatch → review → consolidate → sync until all dispatch units are completed
+- Halt if `pending_decisions` requires human input
+
+Use the manual steps below only for debugging.
+
 ### Step 1: Initialize Orchestration [AUTOMATIC]
 
 Use the shell command tool to parse/validate:
