@@ -112,7 +112,7 @@ def task_in_final_review_strategy(draw):
         "description": f"Task {task_id} description",
         "status": "final_review",
         "criticality": criticality,
-        "owner_agent": "kiro-cli",
+        "owner_agent": "codex",
         "dependencies": [],
     }
     
@@ -358,7 +358,7 @@ def test_consolidate_reviews_file_integration():
                     "description": "Implement feature",
                     "status": "final_review",
                     "criticality": "standard",
-                    "owner_agent": "kiro-cli",
+                    "owner_agent": "codex",
                 },
                 {
                     "task_id": "task-002",

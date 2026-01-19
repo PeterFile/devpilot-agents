@@ -128,7 +128,7 @@ def test_property_2_agent_assignment_by_task_type(task):
     Property 2: Agent Assignment by Task Type
     
     For any task, the assigned owner_agent SHALL be:
-    - "kiro-cli" if task type is "code"
+    - "codex" if task type is "code"
     - "gemini" if task type is "ui"
     - "codex-review" if task type is "review"
     
@@ -156,12 +156,12 @@ def test_agent_assignment_exhaustive(task_type):
     agent = assign_owner_agent(task)
     
     # Verify agent is one of the valid agents
-    valid_agents = {"kiro-cli", "gemini", "codex-review"}
+    valid_agents = {"codex", "gemini", "codex-review"}
     assert agent in valid_agents, f"Invalid agent: {agent}"
     
     # Verify correct mapping
     if task_type == TaskType.CODE:
-        assert agent == "kiro-cli"
+        assert agent == "codex"
     elif task_type == TaskType.UI:
         assert agent == "gemini"
     elif task_type == TaskType.REVIEW:
@@ -243,7 +243,7 @@ def test_task_entry_conversion_legacy(task):
     """Test legacy task conversion includes decision fields."""
     entry = convert_task_to_entry(task, include_decisions=True)
     
-    assert entry.owner_agent in {"kiro-cli", "gemini", "codex-review"}
+    assert entry.owner_agent in {"codex", "gemini", "codex-review"}
     assert entry.criticality in {"standard", "complex", "security-sensitive"}
 
 
@@ -345,10 +345,10 @@ def test_dispatch_batch_failure_keeps_tasks_not_started():
             "session_name": "test-session",
             "tasks": [
                 {"task_id": "1", "description": "Task 1", "status": "not_started",
-                 "owner_agent": "kiro-cli", "target_window": "kiro-cli",
+                 "owner_agent": "codex", "target_window": "codex",
                  "dependencies": [], "criticality": "standard"},
                 {"task_id": "2", "description": "Task 2", "status": "not_started",
-                 "owner_agent": "kiro-cli", "target_window": "kiro-cli",
+                 "owner_agent": "codex", "target_window": "codex",
                  "dependencies": [], "criticality": "standard"},
             ],
             "review_findings": [],
@@ -391,7 +391,7 @@ def test_fix_dispatch_failure_reports_errors():
             "session_name": "test-session",
             "tasks": [
                 {"task_id": "1", "description": "Fix task", "status": "fix_required",
-                 "owner_agent": "kiro-cli", "target_window": "kiro-cli",
+                 "owner_agent": "codex", "target_window": "codex",
                  "dependencies": [], "criticality": "standard",
                  "fix_attempts": 0, "last_review_severity": "major",
                  "review_history": [{
@@ -447,9 +447,9 @@ def test_dispatch_batch_partial_failure_handles_results():
             "session_name": "test-session",
             "tasks": [
                 {"task_id": "1", "description": "Task 1", "status": "not_started",
-                 "owner_agent": "kiro-cli", "dependencies": [], "criticality": "standard"},
+                 "owner_agent": "codex", "dependencies": [], "criticality": "standard"},
                 {"task_id": "2", "description": "Task 2", "status": "not_started",
-                 "owner_agent": "kiro-cli", "dependencies": [], "criticality": "standard"},
+                 "owner_agent": "codex", "dependencies": [], "criticality": "standard"},
             ],
             "review_findings": [],
             "final_reports": [],

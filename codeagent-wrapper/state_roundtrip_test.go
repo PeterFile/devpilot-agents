@@ -18,7 +18,7 @@ func TestStateRoundTripPreservesOrchestrationFields(t *testing.T) {
 	// Simulate Python script creating initial state with orchestration fields
 	parentID := "1"
 	escalatedAt := "2026-01-09T00:00:00Z"
-	originalAgent := "kiro-cli"
+	originalAgent := "codex"
 	lastReviewSeverity := "major"
 	blockedReason := "upstream failure"
 	blockedBy := "task-0"
@@ -33,7 +33,7 @@ func TestStateRoundTripPreservesOrchestrationFields(t *testing.T) {
 				Type:        "code",
 				Status:      "not_started",
 				// Orchestration fields (set by Python)
-				OwnerAgent:         "kiro-cli",
+				OwnerAgent:         "codex",
 				Dependencies:       []string{"task-0"},
 				Criticality:        "standard",
 				IsOptional:         false,
@@ -136,8 +136,8 @@ func TestStateRoundTripPreservesOrchestrationFields(t *testing.T) {
 	if task.Type != "code" {
 		t.Errorf("type: expected 'code', got %s", task.Type)
 	}
-	if task.OwnerAgent != "kiro-cli" {
-		t.Errorf("owner_agent: expected kiro-cli, got %s", task.OwnerAgent)
+	if task.OwnerAgent != "codex" {
+		t.Errorf("owner_agent: expected codex, got %s", task.OwnerAgent)
 	}
 	if len(task.Dependencies) != 1 || task.Dependencies[0] != "task-0" {
 		t.Errorf("dependencies: expected [task-0], got %v", task.Dependencies)
@@ -172,8 +172,8 @@ func TestStateRoundTripPreservesOrchestrationFields(t *testing.T) {
 	if task.EscalatedAt == nil || *task.EscalatedAt != "2026-01-09T00:00:00Z" {
 		t.Errorf("escalated_at: expected '2026-01-09T00:00:00Z', got %v", task.EscalatedAt)
 	}
-	if task.OriginalAgent == nil || *task.OriginalAgent != "kiro-cli" {
-		t.Errorf("original_agent: expected 'kiro-cli', got %v", task.OriginalAgent)
+	if task.OriginalAgent == nil || *task.OriginalAgent != "codex" {
+		t.Errorf("original_agent: expected 'codex', got %v", task.OriginalAgent)
 	}
 	if task.LastReviewSeverity == nil || *task.LastReviewSeverity != "major" {
 		t.Errorf("last_review_severity: expected 'major', got %v", task.LastReviewSeverity)
@@ -207,7 +207,7 @@ func TestStateRoundTripMultipleUpdates(t *testing.T) {
 			{
 				TaskID:       "task-1",
 				Status:       "not_started",
-				OwnerAgent:   "kiro-cli",
+						OwnerAgent:   "codex",
 				Dependencies: []string{"task-0"},
 				Subtasks:     []string{"task-1.1"},
 				Writes:       []string{"file.go"},
@@ -265,8 +265,8 @@ func TestStateRoundTripMultipleUpdates(t *testing.T) {
 	}
 
 	// Verify orchestration fields still preserved after multiple updates
-	if task.OwnerAgent != "kiro-cli" {
-		t.Errorf("owner_agent lost after updates: expected kiro-cli, got %s", task.OwnerAgent)
+	if task.OwnerAgent != "codex" {
+		t.Errorf("owner_agent lost after updates: expected codex, got %s", task.OwnerAgent)
 	}
 	if len(task.Dependencies) != 1 || task.Dependencies[0] != "task-0" {
 		t.Errorf("dependencies lost after updates: expected [task-0], got %v", task.Dependencies)

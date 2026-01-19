@@ -55,6 +55,7 @@ class ReviewTaskConfig:
     workdir: str = "."
     content: str = ""
     reviewer_index: int = 1
+    dependencies: List[str] = field(default_factory=list)
     
     def to_heredoc(self) -> str:
         """Convert to heredoc format for codeagent-wrapper"""
@@ -63,9 +64,13 @@ class ReviewTaskConfig:
             f"id: {self.review_id}",
             f"backend: {self.backend}",
             f"workdir: {self.workdir}",
+        ]
+        if self.dependencies:
+            lines.append(f"dependencies: {','.join(self.dependencies)}")
+        lines.extend([
             "---CONTENT---",
             self.content,
-        ]
+        ])
         return "\n".join(lines)
 
 
@@ -276,6 +281,7 @@ def build_review_configs(
                 workdir=workdir,
                 content=build_review_content(task, spec_path, reviewer_index, task_lookup),
                 reviewer_index=reviewer_index,
+                dependencies=[task_id],
             )
             configs.append(config)
     

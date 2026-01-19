@@ -1,7 +1,7 @@
 ---
 name: multi-agent-orchestrator
 description: |
-  Orchestrate multi-agent workflows with kiro-cli and Gemini workers.
+  Orchestrate multi-agent workflows with codex and Gemini workers.
   
   **Trigger Conditions:**
   - WHEN user says "Start orchestration from spec at <path>"
@@ -9,7 +9,7 @@ description: |
   - WHEN user mentions multi-agent execution
   
   **Use Cases:**
-  - Multi-agent code implementation with kiro-cli and Gemini
+  - Multi-agent code implementation with codex and Gemini
   - Structured review workflows with Codex reviewers
   - Dual-document state management (Codex-generated AGENT_STATE.json + PROJECT_PULSE.md)
 license: MIT
@@ -17,7 +17,7 @@ license: MIT
 
 # Multi-Agent Orchestrator
 
-You are the Multi-Agent Orchestrator, responsible for coordinating kiro-cli (code) and Gemini (UI) agents to implement tasks from a Kiro spec.
+You are the Multi-Agent Orchestrator, responsible for coordinating codex (code) and Gemini (UI) agents to implement tasks from a Kiro spec.
 
 ## Quick Start
 
@@ -72,13 +72,44 @@ Legacy mode (`--mode legacy`) is available for backward compatibility only.
 
 ### Step 1b: Codex Decision & Generation [AUTOMATIC]
 
-Codex must generate the final orchestration artifacts before dispatch:
+Codex must use `codeagent-wrapper` to read TASKS_PARSED.json + AGENT_STATE.json, generate dispatch assignments, then apply them:
 
-- Fill `owner_agent` for each dispatchable task (`kiro-cli`, `gemini`, or `codex`)
-- Assign `target_window` (max 9 windows; group related tasks)
-- Set `criticality` (`standard`, `complex`, `security-sensitive`)
-- Fill `writes` and `reads` arrays for file conflict detection (enables parallel execution)
-- Optionally add `window_mapping`
+```bash
+codeagent-wrapper --backend codex - <<'EOF'
+You are generating dispatch assignments for multi-agent orchestration.
+
+Inputs:
+- @TASKS_PARSED.json
+- @AGENT_STATE.json
+
+Rules:
+- Only assign Dispatch Units (parent tasks or standalone tasks).
+- Do NOT assign leaf tasks with parents.
+- owner_agent: codex | gemini | codex-review
+- target_window: task-<task_id> or grouped names (max 9)
+- criticality: standard | complex | security-sensitive
+- writes/reads: list of files (best-effort)
+
+Output JSON only:
+{
+  "dispatch_units": [
+    {
+      "task_id": "1",
+      "owner_agent": "codex",
+      "target_window": "task-1",
+      "criticality": "standard",
+      "writes": ["src/example.py"],
+      "reads": ["src/config.py"]
+    }
+  ],
+  "window_mapping": {
+    "1": "task-1"
+  }
+}
+EOF
+```
+
+Then apply the JSON into AGENT_STATE.json (Write tool), and update PROJECT_PULSE.md using design.md + current state.
 
 **File Manifest (`writes` / `reads`):**
 - `writes`: Files the task will create or modify (e.g., `["src/api/auth.py", "src/models/user.py"]`)
@@ -165,7 +196,7 @@ When all tasks are completed, provide a summary:
 **Duration:** ~Z minutes
 
 ### Task Results:
-- task-001: ✅ Completed (kiro-cli)
+- task-001: ✅ Completed (codex)
 - task-002: ✅ Completed (gemini)
 - ...
 
@@ -214,9 +245,9 @@ Codex assigns `owner_agent` for each task; scripts only route to the matching ba
 
 | Task Type | Agent | Backend |
 |-----------|-------|---------|
-| Code | kiro-cli | `--backend kiro-cli` |
+| Code | codex | `--backend codex` |
 | UI | Gemini | `--backend gemini` |
-| Review | Codex | `--backend codex` |
+| Review | codex-review | `--backend codex` |
 
 ---
 

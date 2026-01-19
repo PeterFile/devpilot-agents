@@ -36,7 +36,7 @@ from spec_parser import (
 
 # Legacy agent assignment by task type (Requirement 1.3, 11.5)
 AGENT_BY_TASK_TYPE = {
-    TaskType.CODE: "kiro-cli",
+    TaskType.CODE: "codex",
     TaskType.UI: "gemini",
     TaskType.REVIEW: "codex-review",
 }
@@ -150,7 +150,7 @@ def assign_owner_agent(task: Task) -> str:
 
     Requirement 1.3, 11.5: Determine appropriate agent based on task type
     """
-    return AGENT_BY_TASK_TYPE.get(task.task_type, "kiro-cli")
+    return AGENT_BY_TASK_TYPE.get(task.task_type, "codex")
 
 
 def convert_task_to_entry(task: Task, include_decisions: bool = False) -> TaskEntry:

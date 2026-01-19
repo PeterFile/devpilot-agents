@@ -5,7 +5,7 @@
 ## 前置条件
 
 - Go 1.21+（本仓库 `go.work` / `codeagent-wrapper/go.mod`）
-- 至少安装一个 backend CLI：`codex` / `claude` / `gemini` / `kiro-cli`
+- 至少安装一个 backend CLI：`codex` / `claude` / `gemini`
 - （可选）`tmux`：仅在 `--tmux-session` 模式需要（常用于 `multi-agent-orchestration`）
 
 验证：
@@ -47,7 +47,7 @@ go build -o ../bin/codeagent-wrapper .
 
 - `codeagent-wrapper "task" [workdir]`
 - `codeagent-wrapper - [workdir]`（从 stdin 读任务）
-- `codeagent-wrapper --backend codex|claude|gemini|kiro-cli "task" [workdir]`
+- `codeagent-wrapper --backend codex|claude|gemini "task" [workdir]`
 
 PowerShell 示例（stdin）：
 

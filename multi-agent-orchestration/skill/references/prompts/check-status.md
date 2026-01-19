@@ -44,7 +44,7 @@ Progress: 36% (4/11 completed)
 #### Active Tasks
 ```
 In Progress:
-  • task-005: Implement user management (kiro-cli)
+  • task-005: Implement user management (codex)
     Window: task-005, Pane: %3
     Started: 2026-01-06T09:15:00Z
     

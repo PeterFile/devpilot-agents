@@ -246,7 +246,7 @@ def verify_task_entry_structure(task: Dict[str, Any], require_decisions: bool = 
         if task.get("criticality") not in valid_criticalities:
             errors.append(f"Invalid criticality: {task.get('criticality')}")
         
-        valid_agents = ["kiro-cli", "gemini", "codex-review", "codex"]
+        valid_agents = ["codex", "gemini", "codex-review"]
         if task.get("owner_agent") not in valid_agents:
             errors.append(f"Invalid owner_agent: {task.get('owner_agent')}")
     
@@ -254,7 +254,7 @@ def verify_task_entry_structure(task: Dict[str, Any], require_decisions: bool = 
 
 
 TYPE_TO_AGENT = {
-    "code": "kiro-cli",
+    "code": "codex",
     "ui": "gemini",
     "review": "codex-review",
 }
@@ -264,7 +264,7 @@ def apply_codex_assignments(state: Dict[str, Any]) -> None:
     """Assign owner_agent/criticality/target_window for tests that dispatch."""
     for task in state.get("tasks", []):
         task_type = task.get("type", "code")
-        owner_agent = task.get("owner_agent") or TYPE_TO_AGENT.get(task_type, "kiro-cli")
+        owner_agent = task.get("owner_agent") or TYPE_TO_AGENT.get(task_type, "codex")
         task["owner_agent"] = owner_agent
         task.setdefault("criticality", "standard")
         task.setdefault("target_window", f"task-{task.get('task_id')}")
@@ -474,7 +474,7 @@ class TestE2EOrchestration:
             
             for config in configs:
                 assert config.task_id is not None
-                assert config.backend in ["kiro-cli", "gemini", "codex"]
+                assert config.backend in ["codex", "gemini"]
                 assert config.content is not None
                 
                 # Verify heredoc format
@@ -674,7 +674,7 @@ class TestE2EOrchestration:
                 
                 # Verify agent assignment matches task type
                 if task_type == "code":
-                    assert owner_agent == "kiro-cli", f"Code task should use kiro-cli, got {owner_agent}"
+                    assert owner_agent == "codex", f"Code task should use codex, got {owner_agent}"
                 elif task_type == "ui":
                     assert owner_agent == "gemini", f"UI task should use gemini, got {owner_agent}"
                 elif task_type == "review":
@@ -746,7 +746,7 @@ class TestE2EOrchestration:
                     "description": "Implement feature",
                     "status": "final_review",
                     "type": "code",
-                    "owner_agent": "kiro-cli",
+                    "owner_agent": "codex",
                     "dependencies": [],
                     "criticality": "standard",
                 },
@@ -755,7 +755,7 @@ class TestE2EOrchestration:
                     "description": "Dependent task",
                     "status": "not_started",
                     "type": "code",
-                    "owner_agent": "kiro-cli",
+                    "owner_agent": "codex",
                     "dependencies": ["task-001"],
                     "criticality": "standard",
                 },
@@ -850,7 +850,7 @@ class TestE2EOrchestration:
                     "description": "Implement feature",
                     "status": "fix_required",
                     "type": "code",
-                    "owner_agent": "kiro-cli",
+                    "owner_agent": "codex",
                     "dependencies": [],
                     "criticality": "standard",
                     "fix_attempts": 2,  # 2 completed fix attempts
@@ -904,7 +904,7 @@ class TestE2EOrchestration:
         task = state["tasks"][0]
         assert task.get("escalated") is True
         assert task.get("escalated_at") is not None
-        assert task.get("original_agent") == "kiro-cli"
+        assert task.get("original_agent") == "codex"
         
         print("✅ Fix loop: escalation after 2 failures workflow completed")
     
@@ -924,7 +924,7 @@ class TestE2EOrchestration:
                     "description": "Implement feature",
                     "status": "fix_required",
                     "type": "code",
-                    "owner_agent": "kiro-cli",
+                    "owner_agent": "codex",
                     "dependencies": [],
                     "criticality": "standard",
                     "fix_attempts": 3,  # 3 completed fix attempts (max)
@@ -962,7 +962,7 @@ class TestE2EOrchestration:
                     "description": "Dependent task",
                     "status": "not_started",
                     "type": "code",
-                    "owner_agent": "kiro-cli",
+                    "owner_agent": "codex",
                     "dependencies": ["task-001"],
                     "criticality": "standard",
                 },
@@ -1026,7 +1026,7 @@ class TestE2EOrchestration:
                         "description": "Implement authentication",
                         "status": "final_review",
                         "type": "code",
-                        "owner_agent": "kiro-cli",
+                        "owner_agent": "codex",
                         "dependencies": [],
                         "criticality": "security-sensitive",
                     },

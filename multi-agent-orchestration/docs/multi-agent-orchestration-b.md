@@ -119,7 +119,7 @@ codeagent-wrapper --parallel \
   <<'EOF'
 ---TASK---
 id: task-001
-backend: kiro-cli
+backend: codex
 workdir: .
 target_window: backend
 ---CONTENT---

@@ -124,7 +124,7 @@ def create_test_spec_directory(base_dir: str) -> str:
 
 
 TYPE_TO_AGENT = {
-    "code": "kiro-cli",
+    "code": "codex",
     "ui": "gemini",
     "review": "codex-review",
 }
@@ -134,7 +134,7 @@ def apply_codex_assignments(state: Dict[str, Any]) -> None:
     """Assign owner_agent/criticality/target_window for dispatch tests."""
     for task in state.get("tasks", []):
         task_type = task.get("type", "code")
-        owner_agent = task.get("owner_agent") or TYPE_TO_AGENT.get(task_type, "kiro-cli")
+        owner_agent = task.get("owner_agent") or TYPE_TO_AGENT.get(task_type, "codex")
         task["owner_agent"] = owner_agent
         task.setdefault("criticality", "standard")
         task.setdefault("target_window", f"task-{task.get('task_id')}")

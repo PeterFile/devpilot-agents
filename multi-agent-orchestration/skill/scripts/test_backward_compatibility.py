@@ -397,7 +397,7 @@ class TestFlatTasksStateIntegration:
                     "subtasks": [],
                     "parent_id": None,
                     "dependencies": [],
-                    "owner_agent": "kiro-cli",
+                    "owner_agent": "codex",
                     "target_window": "task-1",
                 },
                 {
@@ -407,7 +407,7 @@ class TestFlatTasksStateIntegration:
                     "subtasks": [],
                     "parent_id": None,
                     "dependencies": ["1"],
-                    "owner_agent": "kiro-cli",
+                    "owner_agent": "codex",
                     "target_window": "task-2",
                 },
                 {
@@ -417,7 +417,7 @@ class TestFlatTasksStateIntegration:
                     "subtasks": [],
                     "parent_id": None,
                     "dependencies": [],
-                    "owner_agent": "kiro-cli",
+                    "owner_agent": "codex",
                     "target_window": "task-3",
                 },
             ]

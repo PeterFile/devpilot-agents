@@ -49,10 +49,9 @@ logger = logging.getLogger(__name__)
 
 # Agent backend mapping
 AGENT_TO_BACKEND = {
-    "kiro-cli": "kiro-cli",
+    "codex": "codex",
     "gemini": "gemini",
     "codex-review": "codex",
-    "codex": "codex",
 }
 
 

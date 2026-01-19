@@ -78,7 +78,7 @@ def task_entry_strategy(draw):
     description = draw(st.text(alphabet=desc_chars, min_size=5, max_size=50))
     
     # Generate optional fields
-    owner_agent = draw(st.sampled_from(["kiro-cli", "gemini", "codex-review"]))
+    owner_agent = draw(st.sampled_from(["codex", "gemini", "codex-review"]))
     criticality = draw(st.sampled_from(["standard", "complex", "security-sensitive"]))
     
     entry = {
@@ -703,9 +703,9 @@ def test_build_mental_model_contains_task_info():
         "spec_path": "/test/spec/feature",
         "session_name": "test-session",
         "tasks": [
-            {"task_id": "1", "status": "completed", "owner_agent": "kiro-cli"},
+            {"task_id": "1", "status": "completed", "owner_agent": "codex"},
             {"task_id": "2", "status": "in_progress", "owner_agent": "gemini"},
-            {"task_id": "3", "status": "blocked", "owner_agent": "kiro-cli"},
+            {"task_id": "3", "status": "blocked", "owner_agent": "codex"},
         ],
         "review_findings": [],
         "final_reports": [],
@@ -728,7 +728,7 @@ def test_build_mental_model_contains_task_info():
     assert "1/3" in new_model.description  # 1 completed out of 3
     
     # Should contain agents
-    assert "kiro-cli" in new_model.description or "gemini" in new_model.description
+    assert "codex" in new_model.description or "gemini" in new_model.description
     
     # Should have mermaid diagram
     assert "flowchart" in new_model.mermaid_diagram

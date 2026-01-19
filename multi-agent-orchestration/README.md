@@ -1,6 +1,6 @@
 # Multi-Agent Orchestration System
 
-Coordinates kiro-cli, Gemini, and Codex agents for parallel task execution with structured review workflows.
+Coordinates Codex (code + review) and Gemini (UI) agents for parallel task execution with structured review workflows.
 
 ## Structure
 
@@ -15,6 +15,7 @@ multi-agent-orchestration/
 ├── commands/               # Claude Code commands
 │   └── orchestrate.md      # /orchestrate command
 ├── docs/                   # Documentation
+│   ├── usage.md
 │   ├── workflow-simulation.md
 │   └── review.md
 └── specs/                  # Kiro spec documents
@@ -71,7 +72,7 @@ python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PR
 - Python 3.x + pytest/hypothesis
 - Go 1.21+ (for codeagent-wrapper)
 - tmux (Linux/macOS)
-- AI backend: kiro-cli, gemini, or codex
+- AI backend: codex or gemini
 
 ## Related
 

@@ -70,7 +70,6 @@ var backendRegistry = map[string]Backend{
 	"codex":    CodexBackend{},
 	"claude":   ClaudeBackend{},
 	"gemini":   GeminiBackend{},
-	"kiro-cli": KiroCliBackend{},
 }
 
 func selectBackend(name string) (Backend, error) {

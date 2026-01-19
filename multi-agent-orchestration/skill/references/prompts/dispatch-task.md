@@ -2,7 +2,7 @@
 
 ## Description
 
-Dispatch a task to the appropriate worker agent (kiro-cli for code, gemini for UI).
+Dispatch a task to the appropriate worker agent (codex for code, gemini for UI, codex-review for review).
 
 ## Parameters
 
@@ -28,9 +28,9 @@ python skills/multi-agent-orchestrator/scripts/dispatch_batch.py AGENT_STATE.jso
 ### Step 3: Determine Agent Type
 | Task Type | Agent | Backend Flag |
 |-----------|-------|--------------|
-| Code implementation | kiro-cli | `--backend kiro-cli` |
+| Code implementation | codex | `--backend codex` |
 | UI/Frontend | Gemini | `--backend gemini` |
-| Review | Codex | `--backend codex` |
+| Review | codex-review | `--backend codex` |
 
 ### Step 4: Build Task Configuration
 ```

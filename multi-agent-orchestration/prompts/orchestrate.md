@@ -27,16 +27,55 @@ Extract these paths from output:
 Read the scaffolded files and make intelligent decisions:
 
 1. Read AGENT_STATE.json and TASKS_PARSED.json
-2. Identify **Dispatch Units** (tasks that get dispatched independently):
+2. Identify **Dispatch Units** (tasks that get dispatched independently):       
    - **Parent tasks**: Tasks with `subtasks` array (e.g., task "1" with subtasks ["1.1", "1.2", "1.3"])
    - **Standalone tasks**: Tasks with no parent AND no subtasks
    - **NOT dispatch units**: Leaf tasks with parents (e.g., "1.1" belongs to parent "1")
 
-3. For EACH **Dispatch Unit only**, decide and fill in:
-   - `owner_agent`: Choose based on task type
-     - `kiro-cli` for code implementation, refactoring, bug fixes
-     - `gemini` for UI components, frontend work
-     - `codex` for reviews, documentation
+3. Generate dispatch assignments via `codeagent-wrapper` (MANDATORY):
+
+```bash
+codeagent-wrapper --backend codex - <<'EOF'
+You are generating dispatch assignments for multi-agent orchestration.
+
+Inputs:
+- @${state_file}
+- @${tasks_file}
+
+Rules:
+- Only assign Dispatch Units (parent tasks or standalone tasks).
+- Do NOT assign leaf tasks with parents.
+- owner_agent: codex | gemini | codex-review
+- target_window: task-<task_id> or grouped names (max 9)
+- criticality: standard | complex | security-sensitive
+- writes/reads: list of files (best-effort)
+
+Output JSON only:
+{
+  "dispatch_units": [
+    {
+      "task_id": "1",
+      "owner_agent": "codex",
+      "target_window": "task-1",
+      "criticality": "standard",
+      "writes": ["src/example.py"],
+      "reads": ["src/config.py"]
+    }
+  ],
+  "window_mapping": {
+    "1": "task-1"
+  }
+}
+EOF
+```
+
+4. Apply the JSON results back into AGENT_STATE.json (Write tool).
+
+5. For EACH **Dispatch Unit only**, ensure these fields are filled in:
+    - `owner_agent`: Choose based on task type
+      - `codex` for code implementation, refactoring, bug fixes, documentation   
+      - `gemini` for UI components, frontend work
+      - `codex-review` for reviews
    - `target_window`: One window per dispatch unit (max 9 windows)
      - Format: `task-{task_id}` (e.g., "task-1", "task-2")
    - `criticality`: Assess complexity
@@ -57,7 +96,6 @@ Read the scaffolded files and make intelligent decisions:
 
 4. **DO NOT** assign `owner_agent` or `target_window` to leaf tasks with parents - they inherit from their parent dispatch unit
 
-5. Write your decisions back to AGENT_STATE.json
 6. Update PROJECT_PULSE.md with Mental Model section
 
 **Dispatch Unit Concept:**

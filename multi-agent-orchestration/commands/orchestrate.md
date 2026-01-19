@@ -28,20 +28,57 @@ Read the scaffolded state file and tasks file:
 
 **YOU MUST NOW:**
 
-1. For each task in AGENT_STATE.json, fill in:
-   - `owner_agent`: Choose `kiro-cli` (code), `gemini` (UI), or `codex` (review)
+1. Generate dispatch assignments via `codeagent-wrapper` (MANDATORY):
+
+```bash
+codeagent-wrapper --backend codex - <<'EOF'
+You are generating dispatch assignments for multi-agent orchestration.
+
+Inputs:
+- @${state_file}
+- @${tasks_file}
+
+Rules:
+- Only assign Dispatch Units (parent tasks or standalone tasks).
+- Do NOT assign leaf tasks with parents.
+- owner_agent: codex | gemini | codex-review
+- target_window: task-<task_id> or grouped names (max 9)
+- criticality: standard | complex | security-sensitive
+- writes/reads: list of files (best-effort)
+
+Output JSON only:
+{
+  "dispatch_units": [
+    {
+      "task_id": "1",
+      "owner_agent": "codex",
+      "target_window": "task-1",
+      "criticality": "standard",
+      "writes": ["src/example.py"],
+      "reads": ["src/config.py"]
+    }
+  ],
+  "window_mapping": {
+    "1": "task-1"
+  }
+}
+EOF
+```
+
+2. Apply the JSON results into AGENT_STATE.json (Write tool).
+
+3. For each task in AGENT_STATE.json, ensure these fields are filled in:
+   - `owner_agent`: Choose `codex` (code), `gemini` (UI), or `codex-review` (review)
    - `target_window`: Group related tasks (max 9 windows, e.g., "setup", "backend", "frontend")
-   - `criticality`: Set to `standard`, `complex`, or `security-sensitive`
+   - `criticality`: Set to `standard`, `complex`, or `security-sensitive`       
 
-2. Use the Write tool to update AGENT_STATE.json with your decisions.
-
-3. Update PROJECT_PULSE.md with Mental Model from design.md.
+4. Update PROJECT_PULSE.md with Mental Model from design.md.
 
 **Example task assignment:**
 ```json
 {
   "task_id": "1.1",
-  "owner_agent": "kiro-cli",
+  "owner_agent": "codex",
   "target_window": "setup",
   "criticality": "standard",
   ...

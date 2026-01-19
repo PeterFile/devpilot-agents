@@ -80,7 +80,7 @@
         },
         "owner_agent": {
           "type": "string",
-          "enum": ["kiro-cli", "gemini", "codex-review", "codex"]
+          "enum": ["codex", "gemini", "codex-review"]
         },
         "dependencies": {
           "type": "array",
