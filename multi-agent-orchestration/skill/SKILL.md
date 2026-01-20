@@ -78,7 +78,7 @@ Use the manual steps below only for debugging.
 Use the shell command tool to parse/validate:
 
 ```bash
-python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path> --session orchestration --mode codex
+python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path> --session roundtable --mode codex
 ```
 
 This creates:
@@ -331,7 +331,7 @@ User: "Start orchestration from spec at .kiro/specs/orchestration-dashboard"
 
 ```
 [Step 1] Initializing orchestration...
-> python init_orchestration.py .kiro/specs/orchestration-dashboard --session orchestration
+> python init_orchestration.py .kiro/specs/orchestration-dashboard --session roundtable
 ✅ Created TASKS_PARSED.json
 ✅ Created AGENT_STATE.json (scaffold)
 ✅ Created PROJECT_PULSE.md (template)

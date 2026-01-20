@@ -111,10 +111,11 @@
 - `codeagent-wrapper --parallel` 会在指定的 tmux session 内为每个任务创建窗口/面板，保证多任务并行、可视化观察与隔离执行。
 - `AGENT_STATE.json` 中的 `window_mapping` 记录 task_id 与 tmux window_id 的映射，便于后续状态追溯与跨批次依赖处理。
 
-### 典型启动与派发示例（tmux session = orchestration）
+### 典型启动与派发示例（tmux session = roundtable）
 ```
 codeagent-wrapper --parallel \
-  --tmux-session orchestration \
+  --tmux-session roundtable \
+  --tmux-no-main-window \
   --state-file /path/to/AGENT_STATE.json \
   <<'EOF'
 ---TASK---

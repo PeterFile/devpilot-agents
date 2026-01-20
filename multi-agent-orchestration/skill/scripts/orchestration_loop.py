@@ -637,7 +637,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--tasks", help="Path to TASKS_PARSED.json (optional)", type=str)
     parser.add_argument("--pulse", help="Path to PROJECT_PULSE.md (optional)", type=str)
     parser.add_argument("--workdir", help="Working directory for dispatch/review scripts", default=".", type=str)
-    parser.add_argument("--session", help="Session name for init_orchestration (when using --spec)", default="orchestration", type=str)
+    parser.add_argument("--session", help="Session name for init_orchestration (when using --spec)", default="roundtable", type=str)
     parser.add_argument("--backend", help="Backend for orchestrator (codex/claude/gemini)", default="codex", type=str)
     parser.add_argument("--assign-backend", help="Backend for assign_dispatch (default: codex)", default="codex", type=str)
     parser.add_argument("--max-iterations", default=50, type=int)

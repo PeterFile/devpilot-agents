@@ -46,7 +46,8 @@ dependencies: <comma_separated_deps>
 ### Step 5: Invoke codeagent-wrapper
 ```bash
 codeagent-wrapper --parallel \
-  --tmux-session orchestration \
+  --tmux-session roundtable \
+  --tmux-no-main-window \
   --state-file AGENT_STATE.json \
   <<'EOF'
 <task_configuration>

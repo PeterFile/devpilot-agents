@@ -11,10 +11,11 @@ import (
 
 // TmuxConfig holds tmux-related configuration.
 type TmuxConfig struct {
-	SessionName string
-	MainWindow  string
-	WindowFor   string
-	StateFile   string
+	SessionName  string
+	MainWindow   string
+	WindowFor    string
+	StateFile    string
+	NoMainWindow bool
 }
 
 // TmuxManager manages tmux sessions, windows, and panes.
@@ -22,10 +23,11 @@ type TmuxManager struct {
 	config TmuxConfig
 	mu     sync.Mutex
 	// tracked task windows (excludes main window)
-	windowNames     map[string]bool
-	windowCount     int
-	windowCacheInit bool
-	sessionID       string
+	windowNames      map[string]bool
+	windowCount      int
+	windowCacheInit  bool
+	sessionID        string
+	mainWindowPruned bool
 }
 
 // Test hooks for tmux command execution.
@@ -99,6 +101,7 @@ func (tm *TmuxManager) EnsureSession() error {
 		if err := tm.ensureSessionOptionsLocked(target); err != nil {
 			return err
 		}
+		tm.pruneMainWindowIfSafeLocked()
 		return nil
 	}
 	output, err := tmuxCommandFn(
@@ -122,11 +125,14 @@ func (tm *TmuxManager) EnsureSession() error {
 	}
 	tm.windowCacheInit = false
 	_ = tm.ensureSessionOptionsLocked(target)
-	splitTarget := mainWindowID
-	if strings.TrimSpace(splitTarget) == "" {
-		splitTarget = fmt.Sprintf("%s:%s", target, tm.config.MainWindow)
+	if !tm.config.NoMainWindow {
+		splitTarget := mainWindowID
+		if strings.TrimSpace(splitTarget) == "" {
+			splitTarget = fmt.Sprintf("%s:%s", target, tm.config.MainWindow)
+		}
+		_, _ = tmuxCommandFn("split-window", "-t", splitTarget)
 	}
-	_, _ = tmuxCommandFn("split-window", "-t", splitTarget)
+	tm.pruneMainWindowIfSafeLocked()
 	return nil
 }
 
@@ -154,6 +160,7 @@ func (tm *TmuxManager) CreateWindow(taskID string) (string, error) {
 		tm.windowNames[taskID] = true
 		tm.windowCount++
 	}
+	tm.pruneMainWindowIfSafeLocked()
 	return strings.TrimSpace(output), nil
 }
 
@@ -303,7 +310,50 @@ func (tm *TmuxManager) GetOrCreateWindow(windowName string) (string, bool, error
 	}
 	tm.windowNames[windowName] = true
 	tm.windowCount++
+	tm.pruneMainWindowIfSafeLocked()
 	return windowName, true, nil
+}
+
+func (tm *TmuxManager) pruneMainWindowIfSafeLocked() {
+	if tm.mainWindowPruned || !tm.config.NoMainWindow {
+		return
+	}
+	mainWindow := strings.TrimSpace(tm.config.MainWindow)
+	if mainWindow == "" {
+		return
+	}
+
+	output, err := tmuxCommandFn(
+		"list-windows",
+		"-t", tm.sessionTargetLocked(),
+		"-F", "#{window_name}",
+	)
+	if err != nil {
+		return
+	}
+
+	windowCount := 0
+	hasMainWindow := false
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		windowCount++
+		if name == mainWindow {
+			hasMainWindow = true
+		}
+	}
+	if windowCount < 2 || !hasMainWindow {
+		return
+	}
+
+	target := fmt.Sprintf("%s:%s", tm.sessionTargetLocked(), mainWindow)
+	if _, err := tmuxCommandFn("kill-window", "-t", target); err != nil {
+		return
+	}
+	tm.mainWindowPruned = true
+	tm.windowCacheInit = false
 }
 
 func (tm *TmuxManager) ensureWindowCacheLocked() error {

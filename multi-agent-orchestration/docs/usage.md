@@ -17,7 +17,7 @@
 运行：
 
 ```bash
-python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path> --session orchestration --mode codex --json
+python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path> --session roundtable --mode codex --json
 ```
 
 拿到输出中的：

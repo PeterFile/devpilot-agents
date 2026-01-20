@@ -78,7 +78,7 @@ Decisions Needed:
 
 #### Summary (default)
 ```
-Orchestration: orchestration-auth
+Orchestration: roundtable-auth
 Progress: 36% (4/11 tasks)
 Active: 2 in_progress, 1 pending_review
 Blocked: 1 task
@@ -91,7 +91,7 @@ Full report with all sections as shown in Step 2.
 #### JSON
 ```json
 {
-  "session_name": "orchestration-auth",
+  "session_name": "roundtable-auth",
   "spec_path": ".kiro/specs/auth-feature",
   "summary": {
     "total": 11,
@@ -168,13 +168,13 @@ def check_status(state_file: str, format: str = "summary") -> str:
 Check tmux session status:
 ```bash
 # List windows
-tmux list-windows -t orchestration
+tmux list-windows -t roundtable
 
 # List panes in task window
-tmux list-panes -t orchestration:task-005
+tmux list-panes -t roundtable:task-005
 
 # Check if session exists
-tmux has-session -t orchestration && echo "Session active"
+tmux has-session -t roundtable && echo "Session active"
 ```
 
 ## Health Checks

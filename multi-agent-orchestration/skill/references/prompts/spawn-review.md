@@ -68,7 +68,8 @@ python skills/multi-agent-orchestrator/scripts/dispatch_reviews.py AGENT_STATE.j
 Or directly:
 ```bash
 codeagent-wrapper --parallel \
-  --tmux-session orchestration \
+  --tmux-session roundtable \
+  --tmux-no-main-window \
   --state-file AGENT_STATE.json \
   <<'EOF'
 <review_task_configuration>

@@ -323,6 +323,7 @@ def invoke_codeagent_wrapper(
         "codeagent-wrapper",
         "--parallel",
         "--tmux-session", session_name,
+        "--tmux-no-main-window",
         "--state-file", state_file,
         "--review",  # Flag to indicate review mode
     ]
@@ -515,7 +516,7 @@ def dispatch_reviews(
     
     # Build review configs
     spec_path = state.get("spec_path", ".")
-    session_name = state.get("session_name", "orchestration")
+    session_name = state.get("session_name", "roundtable")
     configs = build_review_configs(pending_tasks, spec_path, workdir, all_tasks=state.get("tasks", []))
     task_ids = [t["task_id"] for t in pending_tasks]
     

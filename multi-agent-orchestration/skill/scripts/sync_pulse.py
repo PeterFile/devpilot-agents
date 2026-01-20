@@ -523,7 +523,7 @@ def build_mental_model(
     Requirement 6.1: Update Mental Model if architecture changed
     """
     spec_path = agent_state.get("spec_path", "")
-    session_name = agent_state.get("session_name", "orchestration")
+    session_name = agent_state.get("session_name", "roundtable")
     tasks = agent_state.get("tasks", [])
     
     # Build description from state

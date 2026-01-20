@@ -182,6 +182,7 @@ func run() (exitCode int) {
 			fullOutput := false
 			tmuxSession := ""
 			tmuxAttach := false
+			tmuxNoMainWindow := false
 			windowFor := ""
 			stateFile := ""
 			isReview := false
@@ -226,6 +227,10 @@ func run() (exitCode int) {
 					tmuxAttach = true
 				case strings.HasPrefix(arg, "--tmux-attach="):
 					tmuxAttach = parseBoolFlag(strings.TrimPrefix(arg, "--tmux-attach="), tmuxAttach)
+				case arg == "--tmux-no-main-window":
+					tmuxNoMainWindow = true
+				case strings.HasPrefix(arg, "--tmux-no-main-window="):
+					tmuxNoMainWindow = parseBoolFlag(strings.TrimPrefix(arg, "--tmux-no-main-window="), tmuxNoMainWindow)
 				case arg == "--window-for":
 					if i+1 >= len(args) {
 						fmt.Fprintln(os.Stderr, "ERROR: --window-for flag requires a value")
@@ -314,9 +319,10 @@ func run() (exitCode int) {
 			tmuxSessionTarget := ""
 			if tmuxSession != "" {
 				tmuxMgr := NewTmuxManager(TmuxConfig{
-					SessionName: tmuxSession,
-					MainWindow:  "main",
-					StateFile:   stateFile,
+					SessionName:  tmuxSession,
+					MainWindow:   "main",
+					NoMainWindow: tmuxNoMainWindow,
+					StateFile:    stateFile,
 				})
 				if err := tmuxMgr.EnsureSession(); err != nil {
 					fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -593,6 +599,7 @@ Environment Variables:
 Tmux Flags:
     --tmux-session <name>  Enable tmux visualization mode
     --tmux-attach          Attach to tmux session after completion
+    --tmux-no-main-window  Remove the default 'main' window (tmux sessions only)
     --window-for <task_id> Create pane in existing task window (single-task mode)
     --state-file <path>    Write AGENT_STATE.json updates
     --review               Mark tasks as review tasks for state updates

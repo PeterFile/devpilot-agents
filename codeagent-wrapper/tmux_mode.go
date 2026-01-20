@@ -19,10 +19,11 @@ func runTmuxMode(cfg *Config, taskText string, useStdin bool) int {
 	}
 
 	tmuxMgr := NewTmuxManager(TmuxConfig{
-		SessionName: cfg.TmuxSession,
-		MainWindow:  "main",
-		WindowFor:   cfg.WindowFor,
-		StateFile:   cfg.StateFile,
+		SessionName:  cfg.TmuxSession,
+		MainWindow:   "main",
+		NoMainWindow: cfg.TmuxNoMainWindow,
+		WindowFor:    cfg.WindowFor,
+		StateFile:    cfg.StateFile,
 	})
 	if err := tmuxMgr.EnsureSession(); err != nil {
 		logError(err.Error())

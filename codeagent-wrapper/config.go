@@ -22,6 +22,7 @@ type Config struct {
 	MaxParallelWorkers int
 	TmuxSession        string
 	TmuxAttach         bool
+	TmuxNoMainWindow   bool
 	WindowFor          string
 	StateFile          string
 	IsReview           bool
@@ -67,9 +68,9 @@ type TaskResult struct {
 }
 
 var backendRegistry = map[string]Backend{
-	"codex":    CodexBackend{},
-	"claude":   ClaudeBackend{},
-	"gemini":   GeminiBackend{},
+	"codex":  CodexBackend{},
+	"claude": ClaudeBackend{},
+	"gemini": GeminiBackend{},
 }
 
 func selectBackend(name string) (Backend, error) {
@@ -209,6 +210,7 @@ func parseArgs() (*Config, error) {
 	skipPermissions := envFlagEnabled("CODEAGENT_SKIP_PERMISSIONS")
 	tmuxSession := ""
 	tmuxAttach := false
+	tmuxNoMainWindow := false
 	windowFor := ""
 	stateFile := ""
 	isReview := false
@@ -259,6 +261,12 @@ func parseArgs() (*Config, error) {
 		case strings.HasPrefix(arg, "--tmux-attach="):
 			tmuxAttach = parseBoolFlag(strings.TrimPrefix(arg, "--tmux-attach="), tmuxAttach)
 			continue
+		case arg == "--tmux-no-main-window":
+			tmuxNoMainWindow = true
+			continue
+		case strings.HasPrefix(arg, "--tmux-no-main-window="):
+			tmuxNoMainWindow = parseBoolFlag(strings.TrimPrefix(arg, "--tmux-no-main-window="), tmuxNoMainWindow)
+			continue
 		case arg == "--window-for":
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("--window-for flag requires a value")
@@ -303,14 +311,15 @@ func parseArgs() (*Config, error) {
 	args = filtered
 
 	cfg := &Config{
-		WorkDir:         defaultWorkdir,
-		Backend:         backendName,
-		SkipPermissions: skipPermissions,
-		TmuxSession:     tmuxSession,
-		TmuxAttach:      tmuxAttach,
-		WindowFor:       windowFor,
-		StateFile:       stateFile,
-		IsReview:        isReview,
+		WorkDir:          defaultWorkdir,
+		Backend:          backendName,
+		SkipPermissions:  skipPermissions,
+		TmuxSession:      tmuxSession,
+		TmuxAttach:       tmuxAttach,
+		TmuxNoMainWindow: tmuxNoMainWindow,
+		WindowFor:        windowFor,
+		StateFile:        stateFile,
+		IsReview:         isReview,
 	}
 	cfg.MaxParallelWorkers = resolveMaxParallelWorkers()
 

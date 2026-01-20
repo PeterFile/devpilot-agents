@@ -938,7 +938,7 @@ def invoke_codeagent_wrapper(
     if full_output:
         cmd.append("--full-output")
     if use_tmux:
-        cmd += ["--tmux-session", session_name]
+        cmd += ["--tmux-session", session_name, "--tmux-no-main-window"]
     cmd += ["--state-file", state_file]
     cmd_env = os.environ.copy()
 
@@ -1187,7 +1187,7 @@ def dispatch_batch(
             
             if not dry_run:
                 # Invoke codeagent-wrapper for fix task
-                session_name = state.get("session_name", "orchestration")
+                session_name = state.get("session_name", "roundtable")
                 report = invoke_codeagent_wrapper(
                     [fix_config],
                     session_name,
@@ -1297,7 +1297,7 @@ def dispatch_batch(
         logger.info(f"Partitioned {len(ready_tasks)} tasks into {len(batches)} conflict-free batches")
     
     spec_path = state.get("spec_path", ".")
-    session_name = state.get("session_name", "orchestration")
+    session_name = state.get("session_name", "roundtable")
     
     # Get all tasks from state for dispatch unit mode (subtask lookup)
     all_tasks = state.get("tasks", [])
