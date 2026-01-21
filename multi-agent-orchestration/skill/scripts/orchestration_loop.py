@@ -4,14 +4,14 @@ Orchestration Loop Runner
 
 Runs an automated loop for the multi-agent orchestration workflow.
 
-Default mode is deterministic:
+Default mode is llm (Ralph-style):
+- Each iteration starts a fresh orchestrator (LLM) via codeagent-wrapper
+- The orchestrator decides the next actions and outputs JSON (COMPLETE/CONTINUE)
+
+Optional mode (deterministic) is fixed-sequence:
 - Ensure dispatch assignments exist (owner_agent/target_window/criticality/writes/reads)
 - Dispatch tasks, dispatch reviews, consolidate reviews, sync pulse
 - Repeat until all dispatch units are completed or human input is required
-
-Optional mode (llm) is Ralph-style:
-- Each iteration starts a fresh orchestrator (LLM) via codeagent-wrapper
-- The orchestrator decides the next actions and outputs JSON (COMPLETE/CONTINUE)
 """
 
 from __future__ import annotations
@@ -638,12 +638,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--pulse", help="Path to PROJECT_PULSE.md (optional)", type=str)
     parser.add_argument("--workdir", help="Working directory for dispatch/review scripts", default=".", type=str)
     parser.add_argument("--session", help="Session name for init_orchestration (when using --spec)", default="roundtable", type=str)
-    parser.add_argument("--backend", help="Backend for orchestrator (codex/claude/gemini)", default="codex", type=str)
-    parser.add_argument("--assign-backend", help="Backend for assign_dispatch (default: codex)", default="codex", type=str)
+    parser.add_argument("--backend", help="Backend for orchestrator (codex/claude/gemini/opencode)", default="opencode", type=str)
+    parser.add_argument("--assign-backend", help="Backend for assign_dispatch (codex/claude/gemini/opencode; default: codex)", default="codex", type=str)
     parser.add_argument("--max-iterations", default=50, type=int)
     parser.add_argument("--sleep", default=1.0, type=float)
     parser.add_argument("--max-actions", default=6, type=int)
-    parser.add_argument("--mode", choices=["deterministic", "llm"], default="deterministic", type=str)
+    parser.add_argument("--mode", choices=["deterministic", "llm"], default="llm", type=str)
 
     args = parser.parse_args(argv)
     workdir = Path(args.workdir).resolve()
@@ -658,6 +658,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         tasks_file = Path(args.tasks).resolve() if args.tasks else None
         pulse_file = Path(args.pulse).resolve() if args.pulse else None
         paths = _infer_paths(state_file, tasks_file, pulse_file)
+
+    if not os.environ.get("CODEAGENT_OPENCODE_AGENT") and (
+        args.backend == "opencode" or args.assign_backend == "opencode"
+    ):
+        os.environ["CODEAGENT_OPENCODE_AGENT"] = "gawain"
 
     if args.mode == "llm":
         return run_loop_llm(

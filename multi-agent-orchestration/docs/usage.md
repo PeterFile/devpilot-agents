@@ -25,14 +25,34 @@ python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path>
 - TASKS_PARSED.json
 - PROJECT_PULSE.md
 
-### 1b) 一键自动循环（deterministic，推荐给 opencode CLI）
+### 1b) 一键自动循环（llm，默认，推荐给 opencode CLI）
+
+该模式每轮通过 `codeagent-wrapper` 启动一次“全新 orchestrator”（默认 `--backend opencode`，agent 默认 `gawain`），读取 state/pulse/tasks 并输出本轮 actions（JSON），适合更动态的决策与恢复。
+
+从 spec 一键启动：
+
+```bash
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --assign-backend codex --max-iterations 50 --sleep 1
+```
+
+从已有 state 恢复：
+
+```bash
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGENT_STATE.json --pulse PROJECT_PULSE.md --tasks TASKS_PARSED.json --workdir . --assign-backend codex
+```
+
+默认值：
+- `--mode llm --backend opencode`
+- 若未设置 `CODEAGENT_OPENCODE_AGENT`，自动使用 `gawain`
+
+### 1c) 固定顺序循环（deterministic）
 
 该模式以固定顺序循环执行：`assign_dispatch(如需要) -> dispatch_batch -> dispatch_reviews -> consolidate_reviews -> sync_pulse`，直到所有 **Dispatch Unit** 完成或出现 `pending_decisions`（需要人工）。
 
 从 spec 一键启动：
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --mode deterministic --backend codex --assign-backend codex --max-iterations 50 --sleep 1
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --mode deterministic --assign-backend codex --max-iterations 50 --sleep 1
 ```
 
 从已有 state 恢复：
@@ -41,28 +61,12 @@ python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spe
 python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGENT_STATE.json --pulse PROJECT_PULSE.md --tasks TASKS_PARSED.json --workdir . --mode deterministic --assign-backend codex
 ```
 
-### 1c) Ralph-style（llm，每轮新 orchestrator）
-
-该模式每轮通过 `codeagent-wrapper` 启动一次“全新 orchestrator”，读取 state/pulse/tasks 并输出本轮 actions（JSON），适合更动态的决策与恢复。
-
-从 spec 一键启动：
-
-```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --mode llm --backend codex --assign-backend codex --max-iterations 50 --sleep 1
-```
-
-从已有 state 恢复：
-
-```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGENT_STATE.json --pulse PROJECT_PULSE.md --tasks TASKS_PARSED.json --workdir . --mode llm --backend codex --assign-backend codex
-```
-
 退出码：
 - `0`：所有 Dispatch Unit 已完成
 - `1`：停止/未完成（max iterations/no progress/显式 halt 等）
 - `2`：存在 `pending_decisions`（需要人工输入）
 
-🔒 安全提示：该循环会自动执行 `codeagent-wrapper` 和任务脚本，可能修改大量文件；建议先在独立分支运行。
+SECURITY: 该循环会自动执行 `codeagent-wrapper` 和任务脚本，可能修改大量文件；建议先在独立分支运行。
 
 ### 2) 填写调度决策
 

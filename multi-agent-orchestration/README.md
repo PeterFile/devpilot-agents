@@ -66,18 +66,16 @@ python multi-agent-orchestration/skill/scripts/consolidate_reviews.py AGENT_STAT
 python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
 ```
 
-### One-Command Loop Runner (Recommended)
+### One-Command Loop Runner (Default)
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --mode deterministic --backend codex --assign-backend codex
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --assign-backend codex
 ```
 
-### Ralph-style Loop Runner (LLM Mode)
-
-Each iteration spawns a fresh orchestrator (via `codeagent-wrapper`) which decides the next actions.
+### Deterministic Loop Runner
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --mode llm --backend codex --assign-backend codex
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --mode deterministic --assign-backend codex
 ```
 
 Exit codes:
@@ -90,7 +88,7 @@ Exit codes:
 - Python 3.x + pytest/hypothesis
 - Go 1.21+ (for codeagent-wrapper)
 - tmux (Linux/macOS)
-- AI backend: codex or gemini
+- AI backends: opencode (orchestrator, default), codex/gemini (workers)
 
 ## Related
 

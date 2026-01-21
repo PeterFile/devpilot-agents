@@ -12,10 +12,11 @@ Spec: $SPEC_PATH
 Run the entire orchestration in a single blocking command:
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec $SPEC_PATH --workdir . --mode deterministic --backend codex --assign-backend codex
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec $SPEC_PATH --workdir . --assign-backend codex  
 ```
 
-Exit codes: `0` complete, `1` halted/incomplete, `2` `pending_decisions` (human input required).  
-Optional: `--mode llm` for Ralph-style per-iteration orchestrator.
+Exit codes: `0` complete, `1` halted/incomplete, `2` `pending_decisions` (human input required).
+Defaults: `--mode llm --backend opencode` and `CODEAGENT_OPENCODE_AGENT=gawain` (if unset).
+Optional: `--mode deterministic` for a fixed-sequence runner.
 
 Wait for the command to finish. If it halts due to `pending_decisions`, report them. Otherwise, summarize results.

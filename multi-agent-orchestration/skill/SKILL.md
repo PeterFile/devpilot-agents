@@ -1,17 +1,6 @@
 ---
 name: multi-agent-orchestrator
-description: |
-  Orchestrate multi-agent workflows with codex and Gemini workers.
-  
-  **Trigger Conditions:**
-  - WHEN user says "Start orchestration from spec at <path>"
-  - WHEN user says "Run orchestration for <feature>"
-  - WHEN user mentions multi-agent execution
-  
-  **Use Cases:**
-  - Multi-agent code implementation with codex and Gemini
-  - Structured review workflows with Codex reviewers
-  - Dual-document state management (Codex-generated AGENT_STATE.json + PROJECT_PULSE.md)
+description: Orchestrate multi-agent workflows from a Kiro spec using codex (code) + Gemini (UI), including dispatch/review/state sync via AGENT_STATE.json + PROJECT_PULSE.md; triggers on user says "Start orchestration from spec at <path>", "Run orchestration for <feature>", or mentions multi-agent execution.
 license: MIT
 ---
 
@@ -58,7 +47,7 @@ When user triggers orchestration (e.g., "Start orchestration from spec at .kiro/
 Run the entire workflow in a single blocking command (no user click / no manual continuation):
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --mode deterministic --assign-backend codex
+python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --assign-backend codex
 ```
 
 This command will:
@@ -69,7 +58,9 @@ This command will:
 
 Exit codes: `0` complete, `1` halted/incomplete, `2` `pending_decisions` (human input required).
 
-Advanced: `--mode llm` for Ralph-style per-iteration orchestrator (fresh context each tick).
+Defaults: `--mode llm --backend opencode` and `CODEAGENT_OPENCODE_AGENT=gawain` (if unset).
+
+Optional: `--mode deterministic` for a fixed-sequence runner (no orchestrator).
 
 Use the manual steps below only for debugging.
 
