@@ -168,7 +168,8 @@ func buildOpenCodeArgs(cfg *Config, _ string) []string {
 
 	task := strings.TrimSpace(cfg.Task)
 	if task != "" {
-		args = append(args, task)
+		// NOTE: opencode's --file is an array option; without "--" the prompt may be parsed as another file.
+		args = append(args, "--", task)
 	}
 	return args
 }

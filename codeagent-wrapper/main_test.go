@@ -1675,6 +1675,7 @@ func TestBackendBuildArgs_OpenCodeBackend(t *testing.T) {
 		"--session", "ses_123",
 		"--file", "foo.txt",
 		"--file", "Makefile",
+		"--",
 		"Decide based on @foo.txt and @Makefile",
 	}
 	if len(got) != len(want) {

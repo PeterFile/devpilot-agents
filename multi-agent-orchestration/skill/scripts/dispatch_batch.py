@@ -43,6 +43,9 @@ from spec_parser import (
 # Import fix loop processing (Req 3.1, 4.6)
 from fix_loop import process_fix_loop, get_fix_required_tasks, on_fix_task_complete, rollback_fix_dispatch
 
+# Import codeagent-wrapper helpers (PATH/local bin resolution; tmux fallback)
+from codeagent_wrapper_utils import resolve_codeagent_wrapper, looks_like_tmux_missing
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -934,13 +937,26 @@ def invoke_codeagent_wrapper(
     # Build command (allow disabling tmux in restricted environments)
     use_tmux = os.environ.get("CODEAGENT_NO_TMUX", "").strip().lower() not in {"1", "true", "yes"}
     full_output = os.environ.get("CODEAGENT_FULL_OUTPUT", "").strip().lower() in {"1", "true", "yes"}
-    cmd = ["codeagent-wrapper", "--parallel"]
-    if full_output:
-        cmd.append("--full-output")
-    if use_tmux:
-        cmd += ["--tmux-session", session_name, "--tmux-no-main-window"]
-    cmd += ["--state-file", state_file]
     cmd_env = os.environ.copy()
+
+    try:
+        wrapper_bin = resolve_codeagent_wrapper()
+    except FileNotFoundError:
+        return ExecutionReport(
+            success=False,
+            tasks_completed=0,
+            tasks_failed=len(configs),
+            errors=["codeagent-wrapper not found (set CODEAGENT_WRAPPER or add it to PATH)"],
+        )
+
+    base_cmd = [wrapper_bin, "--parallel"]
+    if full_output:
+        base_cmd.append("--full-output")
+
+    cmd_no_tmux = base_cmd + ["--state-file", state_file]
+    cmd = cmd_no_tmux
+    if use_tmux:
+        cmd = base_cmd + ["--tmux-session", session_name, "--tmux-no-main-window", "--state-file", state_file]
 
     try:
         result = subprocess.run(
@@ -949,25 +965,44 @@ def invoke_codeagent_wrapper(
             capture_output=True,
             text=True,
             env=cmd_env,
-            timeout=3600  # 1 hour timeout
+            timeout=3600,  # 1 hour timeout
         )
         if use_tmux and result.returncode != 0:
             combined = (result.stderr or "") + "\n" + (result.stdout or "")
-            if _looks_like_tmux_connect_error(combined):
+            if looks_like_tmux_missing(combined):
+                logger.warning("tmux not available; retrying without tmux (set CODEAGENT_NO_TMUX=1 to disable)")
+                result = subprocess.run(
+                    cmd_no_tmux,
+                    input=heredoc_input,
+                    capture_output=True,
+                    text=True,
+                    env=cmd_env,
+                    timeout=3600,
+                )
+            elif _looks_like_tmux_connect_error(combined):
                 tmpdir = _ensure_tmux_tmpdir(cmd_env)
                 if tmpdir:
-                    logger.warning(
-                        "tmux connect failed; retrying with TMUX_TMPDIR=%s",
-                        tmpdir
-                    )
+                    logger.warning("tmux connect failed; retrying with TMUX_TMPDIR=%s", tmpdir)
                     result = subprocess.run(
                         cmd,
                         input=heredoc_input,
                         capture_output=True,
                         text=True,
                         env=cmd_env,
-                        timeout=3600
+                        timeout=3600,
                     )
+                    if result.returncode != 0:
+                        combined = (result.stderr or "") + "\n" + (result.stdout or "")
+                        if _looks_like_tmux_connect_error(combined):
+                            logger.warning("tmux still failing; retrying without tmux (set CODEAGENT_NO_TMUX=1 to disable)")
+                            result = subprocess.run(
+                                cmd_no_tmux,
+                                input=heredoc_input,
+                                capture_output=True,
+                                text=True,
+                                env=cmd_env,
+                                timeout=3600,
+                            )
 
         # Parse output as JSON if possible
         try:
@@ -1000,7 +1035,7 @@ def invoke_codeagent_wrapper(
             success=False,
             tasks_completed=0,
             tasks_failed=len(configs),
-            errors=["codeagent-wrapper not found in PATH"]
+            errors=["codeagent-wrapper not found (set CODEAGENT_WRAPPER or add it to PATH)"],
         )
     except Exception as e:
         return ExecutionReport(

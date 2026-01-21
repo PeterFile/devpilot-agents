@@ -327,7 +327,7 @@ def test_initialization_with_invalid_spec():
 
 # Tests for dispatch failure rollback behavior
 
-def test_dispatch_batch_failure_keeps_tasks_not_started():
+def test_dispatch_batch_failure_keeps_tasks_not_started(monkeypatch):
     """
     Test that failed dispatch does not leave tasks stuck in in_progress.
     
@@ -338,6 +338,7 @@ def test_dispatch_batch_failure_keeps_tasks_not_started():
     
     with tempfile.TemporaryDirectory() as tmpdir:
         state_file = Path(tmpdir) / "AGENT_STATE.json"
+        monkeypatch.setenv("CODEAGENT_WRAPPER", str(Path(tmpdir) / "missing-codeagent-wrapper"))
         
         # Create initial state with tasks
         initial_state = {
@@ -375,7 +376,7 @@ def test_dispatch_batch_failure_keeps_tasks_not_started():
                 f"Task {task['task_id']} should remain not_started after failed dispatch, got {task['status']}"
 
 
-def test_fix_dispatch_failure_reports_errors():
+def test_fix_dispatch_failure_reports_errors(monkeypatch):
     """
     Test that fix dispatch failure surfaces errors to callers.
     
@@ -385,6 +386,7 @@ def test_fix_dispatch_failure_reports_errors():
     
     with tempfile.TemporaryDirectory() as tmpdir:
         state_file = Path(tmpdir) / "AGENT_STATE.json"
+        monkeypatch.setenv("CODEAGENT_WRAPPER", str(Path(tmpdir) / "missing-codeagent-wrapper"))
         
         initial_state = {
             "spec_path": "/test/spec",
@@ -491,7 +493,7 @@ def test_dispatch_batch_partial_failure_handles_results():
             f"Task 2 should remain not_started (no result), got {task2['status']}"
 
 
-def test_dispatch_reviews_failure_keeps_tasks_pending_review():
+def test_dispatch_reviews_failure_keeps_tasks_pending_review(monkeypatch):
     """
     Test that failed review dispatch does not leave tasks stuck in under_review.
     
@@ -502,6 +504,7 @@ def test_dispatch_reviews_failure_keeps_tasks_pending_review():
     
     with tempfile.TemporaryDirectory() as tmpdir:
         state_file = Path(tmpdir) / "AGENT_STATE.json"
+        monkeypatch.setenv("CODEAGENT_WRAPPER", str(Path(tmpdir) / "missing-codeagent-wrapper"))
         
         # Create initial state with tasks pending review
         initial_state = {

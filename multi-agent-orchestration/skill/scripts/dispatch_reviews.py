@@ -26,6 +26,14 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Import fix loop functions for review completion handling (Req 3.1, 4.6)
 from fix_loop import on_review_complete, should_enter_fix_loop
 
+from codeagent_wrapper_utils import (
+    ensure_tmux_tmpdir,
+    looks_like_tmux_connect_error,
+    looks_like_tmux_missing,
+    resolve_codeagent_wrapper,
+    tmux_enabled,
+)
+
 
 # Review count by criticality (Requirement 8.5, 8.6)
 REVIEW_COUNT_BY_CRITICALITY = {
@@ -318,15 +326,35 @@ def invoke_codeagent_wrapper(
             review_results=[{"review_id": c.review_id, "status": "dry_run"} for c in configs]
         )
     
-    # Build command
-    cmd = [
-        "codeagent-wrapper",
-        "--parallel",
-        "--tmux-session", session_name,
-        "--tmux-no-main-window",
-        "--state-file", state_file,
-        "--review",  # Flag to indicate review mode
-    ]
+    full_output = os.environ.get("CODEAGENT_FULL_OUTPUT", "").strip().lower() in {"1", "true", "yes"}
+    use_tmux = tmux_enabled()
+    cmd_env = os.environ.copy()
+
+    try:
+        wrapper_bin = resolve_codeagent_wrapper()
+    except FileNotFoundError:
+        return ReviewReport(
+            success=False,
+            reviews_completed=0,
+            reviews_failed=len(configs),
+            errors=["codeagent-wrapper not found (set CODEAGENT_WRAPPER or add it to PATH)"],
+        )
+
+    base_cmd = [wrapper_bin, "--parallel"]
+    if full_output:
+        base_cmd.append("--full-output")
+
+    cmd_no_tmux = base_cmd + ["--state-file", state_file, "--review"]
+    cmd = cmd_no_tmux
+    if use_tmux:
+        cmd = base_cmd + [
+            "--tmux-session",
+            session_name,
+            "--tmux-no-main-window",
+            "--state-file",
+            state_file,
+            "--review",  # Flag to indicate review mode
+        ]
     
     try:
         result = subprocess.run(
@@ -334,8 +362,43 @@ def invoke_codeagent_wrapper(
             input=heredoc_input,
             capture_output=True,
             text=True,
-            timeout=3600  # 1 hour timeout
+            env=cmd_env,
+            timeout=3600,  # 1 hour timeout
         )
+
+        if use_tmux and result.returncode != 0:
+            combined = (result.stderr or "") + "\n" + (result.stdout or "")
+            if looks_like_tmux_missing(combined):
+                result = subprocess.run(
+                    cmd_no_tmux,
+                    input=heredoc_input,
+                    capture_output=True,
+                    text=True,
+                    env=cmd_env,
+                    timeout=3600,
+                )
+            elif looks_like_tmux_connect_error(combined):
+                tmpdir = ensure_tmux_tmpdir(cmd_env)
+                if tmpdir:
+                    result = subprocess.run(
+                        cmd,
+                        input=heredoc_input,
+                        capture_output=True,
+                        text=True,
+                        env=cmd_env,
+                        timeout=3600,
+                    )
+                    if result.returncode != 0:
+                        combined = (result.stderr or "") + "\n" + (result.stdout or "")
+                        if looks_like_tmux_connect_error(combined):
+                            result = subprocess.run(
+                                cmd_no_tmux,
+                                input=heredoc_input,
+                                capture_output=True,
+                                text=True,
+                                env=cmd_env,
+                                timeout=3600,
+                            )
         
         # Parse output as JSON if possible
         try:
@@ -367,7 +430,7 @@ def invoke_codeagent_wrapper(
             success=False,
             reviews_completed=0,
             reviews_failed=len(configs),
-            errors=["codeagent-wrapper not found in PATH"]
+            errors=["codeagent-wrapper not found (set CODEAGENT_WRAPPER or add it to PATH)"],
         )
     except Exception as e:
         return ReviewReport(

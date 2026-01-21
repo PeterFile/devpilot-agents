@@ -154,6 +154,19 @@ def test_status_preservation(status_data):
     assert result.tasks[0].status == expected
 
 
+def test_task_id_accepts_trailing_dot():
+    content = "\n".join([
+        "# Tasks",
+        "",
+        "- [ ] 1. Initialize project",
+        "- [ ] 1.1. Implement API",
+        "",
+    ])
+    result = parse_tasks(content)
+    assert result.success
+    assert [t.task_id for t in result.tasks] == ["1", "1.1"]
+
+
 if __name__ == "__main__":
     import sys
     

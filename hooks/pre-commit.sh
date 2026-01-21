@@ -45,7 +45,7 @@ if [ -n "$GO_FILES" ]; then
   # Run tests
   if command -v go &> /dev/null; then
     echo "Running go tests..."
-    go test ./... -short || {
+    (cd codeagent-wrapper && go test ./... -short) || {
       echo "❌ Tests failed"
       exit 1
     }

@@ -240,7 +240,7 @@ def _parse_task_line(line: str) -> Tuple[Optional[str], TaskStatus, bool, str]:
     Supports nested task IDs of any depth (e.g., 1, 1.1, 1.1.1, 1.1.1.1).
     """
     # Pattern supports task IDs like: 1, 1.1, 1.1.1, 1.1.1.1, etc.
-    pattern = r'^[-*]\s*\[([xX\s~-])\](\*)?\s*(\d+(?:\.\d+)*)\s+(.+)$'
+    pattern = r'^[-*]\s*\[([xX\s~-])\](\*)?\s*(\d+(?:\.\d+)*)(?:\.)?\s+(.+)$'
     match = re.match(pattern, line.strip())
     
     if not match:

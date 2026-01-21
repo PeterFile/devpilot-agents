@@ -75,7 +75,7 @@ STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 # Run tests on Go files
 GO_FILES=$(echo "$STAGED_FILES" | grep '\.go$' || true)
 if [ -n "$GO_FILES" ]; then
-  go test ./... -short || exit 1
+  (cd codeagent-wrapper && go test ./... -short) || exit 1
 fi
 
 # Validate JSON files

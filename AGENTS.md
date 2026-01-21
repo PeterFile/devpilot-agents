@@ -11,7 +11,7 @@ This repo packages a multi-backend workflow system. Key paths:
 - `python3 install.py --install-dir ~/.claude` installs the default modules.
 - `python3 install.py --module dev` installs a single module.
 - `make deploy-essentials` or `make deploy-bmad` copies commands/agents into `~/.claude`.
-- `go test ./...` runs Go tests (from repo root with `go.work`, or inside `codeagent-wrapper/`).
+- `go test ./codeagent-wrapper/...` runs Go tests from the repo root (workspace). You can also run `go test ./...` inside `codeagent-wrapper/`.
 - `make changelog` updates `CHANGELOG.md` via `git-cliff`.
 
 ## Coding Style & Naming Conventions
@@ -20,7 +20,7 @@ This repo packages a multi-backend workflow system. Key paths:
 - JSON: keep schemas/instances valid; pre-commit uses `jq` for validation.
 
 ## Testing Guidelines
-- Use `go test ./... -short` for quick validation (mirrors `hooks/pre-commit.sh`).
+- Use `(cd codeagent-wrapper && go test ./... -short)` for quick validation (mirrors `hooks/pre-commit.sh`).
 - Add unit tests for new behavior and integration tests when touching CLI orchestration (see `*_integration_test.go` patterns).
 
 ## Commit & Pull Request Guidelines

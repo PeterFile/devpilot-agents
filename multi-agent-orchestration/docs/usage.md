@@ -7,10 +7,18 @@
 ## 前置条件
 
 - Python 3.x
-- codeagent-wrapper
-- tmux（Linux/macOS）
+- codeagent-wrapper（建议在 PATH；或设置 `CODEAGENT_WRAPPER=/path/to/codeagent-wrapper`）
+- tmux（可选；无 tmux 或权限受限时设置 `CODEAGENT_NO_TMUX=1`）
+
+## 常用环境变量
+
+- `CODEAGENT_WRAPPER` / `CODEAGENT_WRAPPER_PATH`：指定 `codeagent-wrapper` 可执行文件路径（覆盖 PATH/本地探测）
+- `CODEAGENT_NO_TMUX=1`：禁用 tmux 可视化（`dispatch_batch.py` / `dispatch_reviews.py` 会自动回退）
+- `CODEAGENT_FULL_OUTPUT=1`：让 `codeagent-wrapper --parallel` 输出更完整的 JSON 报告（可能更慢/更大）
 
 ## 快速开始
+
+注：Skill 安装后脚本位于 `~/.codex/skills/<skill>/scripts/` 或 `~/.claude/skills/<skill>/scripts/`；本仓库源代码位于 `multi-agent-orchestration/skill/scripts/`。
 
 ### 1) 初始化
 
@@ -27,7 +35,7 @@ python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path>
 
 ### 1b) 一键自动循环（llm，默认，推荐给 opencode CLI）
 
-该模式每轮通过 `codeagent-wrapper` 启动一次“全新 orchestrator”（默认 `--backend opencode`，agent 默认 `gawain`），读取 state/pulse/tasks 并输出本轮 actions（JSON），适合更动态的决策与恢复。
+该模式每轮通过 `codeagent-wrapper` 启动一次“全新 orchestrator”（默认 `--backend opencode`），读取 state/pulse/tasks 并输出本轮 actions（JSON），适合更动态的决策与恢复。
 
 从 spec 一键启动：
 
@@ -43,7 +51,7 @@ python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGE
 
 默认值：
 - `--mode llm --backend opencode`
-- 若未设置 `CODEAGENT_OPENCODE_AGENT`，自动使用 `gawain`
+- 如需指定 agent：设置 `CODEAGENT_OPENCODE_AGENT=<agent_name>`
 
 ### 1c) 固定顺序循环（deterministic）
 
@@ -158,4 +166,5 @@ python -c "import json; d=json.load(open('AGENT_STATE.json')); tasks=d.get('task
 ## 常见问题
 
 - 报错缺少 owner_agent/target_window：回到第 2 步补全 Dispatch Unit 字段
-- codeagent-wrapper 找不到：确认已安装且在 PATH 中
+- codeagent-wrapper 找不到：确认已安装且在 PATH 中；或设置 `CODEAGENT_WRAPPER` 指向二进制
+- tmux 报错（连接 /tmp/tmux、权限问题、无 tmux）：设置 `CODEAGENT_NO_TMUX=1`

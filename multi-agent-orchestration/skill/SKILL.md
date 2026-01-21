@@ -47,7 +47,7 @@ When user triggers orchestration (e.g., "Start orchestration from spec at .kiro/
 Run the entire workflow in a single blocking command (no user click / no manual continuation):
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --assign-backend codex
+python scripts/orchestration_loop.py --spec <spec_path> --workdir . --assign-backend codex
 ```
 
 This command will:
@@ -58,7 +58,7 @@ This command will:
 
 Exit codes: `0` complete, `1` halted/incomplete, `2` `pending_decisions` (human input required).
 
-Defaults: `--mode llm --backend opencode` and `CODEAGENT_OPENCODE_AGENT=gawain` (if unset).
+Defaults: `--mode llm --backend opencode`. If needed, set `CODEAGENT_OPENCODE_AGENT` to select an opencode agent.
 
 Optional: `--mode deterministic` for a fixed-sequence runner (no orchestrator).
 
@@ -69,7 +69,7 @@ Use the manual steps below only for debugging.
 Use the shell command tool to parse/validate:
 
 ```bash
-python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path> --session roundtable --mode codex
+python scripts/init_orchestration.py <spec_path> --session roundtable --mode codex
 ```
 
 This creates:
@@ -150,7 +150,7 @@ WHILE there are dispatch units not in "completed" status:
 #### 2a. Dispatch Ready Tasks
 
 ```bash
-python multi-agent-orchestration/skill/scripts/dispatch_batch.py AGENT_STATE.json
+python scripts/dispatch_batch.py AGENT_STATE.json
 ```
 
 This:
@@ -161,7 +161,7 @@ This:
 #### 2b. Dispatch Reviews
 
 ```bash
-python multi-agent-orchestration/skill/scripts/dispatch_reviews.py AGENT_STATE.json
+python scripts/dispatch_reviews.py AGENT_STATE.json
 ```
 
 This:
@@ -172,7 +172,7 @@ This:
 #### 2c. Consolidate Reviews
 
 ```bash
-python multi-agent-orchestration/skill/scripts/consolidate_reviews.py AGENT_STATE.json
+python scripts/consolidate_reviews.py AGENT_STATE.json
 ```
 
 This:
@@ -182,7 +182,7 @@ This:
 #### 2d. Sync to PULSE
 
 ```bash
-python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
+python scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
 ```
 
 #### 2e. Check Completion Status
@@ -227,9 +227,10 @@ When all tasks are completed, provide a summary:
 ### Task Dispatch Failure
 If dispatch_batch.py fails:
 1. Check error message
-2. If "codeagent-wrapper not found": Report to user that codeagent-wrapper needs to be installed
-3. If timeout: Retry once, then report to user
-4. If other error: Log and continue with remaining tasks
+2. If "codeagent-wrapper not found": Ensure it is installed/in PATH, or set `CODEAGENT_WRAPPER=/path/to/codeagent-wrapper` (scripts also probe `./bin/`)
+3. If tmux errors (connect/permission/missing): set `CODEAGENT_NO_TMUX=1` and retry
+4. If timeout: Retry once, then report to user
+5. If other error: Log and continue with remaining tasks
 
 ### Review Failure
 If dispatch_reviews.py fails:

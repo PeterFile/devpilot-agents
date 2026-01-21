@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from codeagent_wrapper_utils import resolve_codeagent_wrapper
+
 
 ALLOWED_ACTION_TYPES = {
     "assign_dispatch",
@@ -207,8 +209,12 @@ def _call_orchestrator(
     cwd: Path,
 ) -> Dict[str, Any]:
     prompt = _build_orchestrator_prompt(paths, recent_events=recent_events, max_actions=max_actions)
+    try:
+        wrapper_bin = resolve_codeagent_wrapper()
+    except FileNotFoundError as e:
+        raise RuntimeError(str(e)) from e
     code, stdout, stderr = _run(
-        ["codeagent-wrapper", "--backend", backend, "-"],
+        [wrapper_bin, "--backend", backend, "-"],
         input_text=prompt,
         cwd=cwd,
     )
@@ -293,8 +299,12 @@ def _ensure_assignments(
         return
 
     prompt = _build_assignment_prompt(paths)
+    try:
+        wrapper_bin = resolve_codeagent_wrapper()
+    except FileNotFoundError as e:
+        raise RuntimeError(str(e)) from e
     code, stdout, stderr = _run(
-        ["codeagent-wrapper", "--backend", assign_backend, "-"],
+        [wrapper_bin, "--backend", assign_backend, "-"],
         input_text=prompt,
         cwd=workdir,
     )
@@ -433,8 +443,12 @@ def run_loop_llm(
 
             if t == "assign_dispatch":
                 prompt = _build_assignment_prompt(paths)
+                try:
+                    wrapper_bin = resolve_codeagent_wrapper()
+                except FileNotFoundError as e:
+                    raise RuntimeError(str(e)) from e
                 code, stdout, stderr = _run(
-                    ["codeagent-wrapper", "--backend", assign_backend, "-"],
+                    [wrapper_bin, "--backend", assign_backend, "-"],
                     input_text=prompt,
                     cwd=workdir,
                 )
@@ -659,10 +673,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         pulse_file = Path(args.pulse).resolve() if args.pulse else None
         paths = _infer_paths(state_file, tasks_file, pulse_file)
 
-    if not os.environ.get("CODEAGENT_OPENCODE_AGENT") and (
-        args.backend == "opencode" or args.assign_backend == "opencode"
-    ):
-        os.environ["CODEAGENT_OPENCODE_AGENT"] = "gawain"
+    # Do not force a default opencode agent here.
+    # Users can set CODEAGENT_OPENCODE_AGENT explicitly; otherwise opencode uses its own default.
 
     if args.mode == "llm":
         return run_loop_llm(
