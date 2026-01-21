@@ -61,9 +61,9 @@ func (e errReader) Read([]byte) (int, error) {
 }
 
 type testBackend struct {
-	name         string
-	command      string
-	argsFn       func(*Config, string) []string
+	name          string
+	command       string
+	argsFn        func(*Config, string) []string
 	supportsStdin bool
 }
 
@@ -1505,6 +1505,7 @@ func TestBackendSelectBackend(t *testing.T) {
 		{"codex", "codex", CodexBackend{}},
 		{"claude mixed case", "ClAuDe", ClaudeBackend{}},
 		{"gemini", "gemini", GeminiBackend{}},
+		{"opencode", "opencode", OpenCodeBackend{}},
 	}
 
 	for _, tt := range tests {
@@ -1525,6 +1526,10 @@ func TestBackendSelectBackend(t *testing.T) {
 			case GeminiBackend:
 				if _, ok := got.(GeminiBackend); !ok {
 					t.Fatalf("expected GeminiBackend, got %T", got)
+				}
+			case OpenCodeBackend:
+				if _, ok := got.(OpenCodeBackend); !ok {
+					t.Fatalf("expected OpenCodeBackend, got %T", got)
 				}
 			}
 		})
@@ -1644,8 +1649,46 @@ func TestGeminiBackendBuildArgs_OutputValidation(t *testing.T) {
 	}
 }
 
+func TestBackendBuildArgs_OpenCodeBackend(t *testing.T) {
+	t.Setenv("CODEAGENT_OPENCODE_AGENT", "king-arthur")
+	t.Setenv("CODEAGENT_OPENCODE_MODEL", "gpt-5")
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Makefile"), []byte("all:\n"), 0o644); err != nil {
+		t.Fatalf("failed to write Makefile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "foo.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("failed to write foo.txt: %v", err)
+	}
+
+	cfg := &Config{
+		Mode:      "resume",
+		SessionID: "ses_123",
+		WorkDir:   dir,
+		Task:      "Decide based on @foo.txt and @Makefile",
+	}
+	got := OpenCodeBackend{}.BuildArgs(cfg, "ignored")
+	want := []string{
+		"run", "--format", "json",
+		"--agent", "king-arthur",
+		"--model", "gpt-5",
+		"--session", "ses_123",
+		"--file", "foo.txt",
+		"--file", "Makefile",
+		"Decide based on @foo.txt and @Makefile",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("args length=%d, want %d (args=%v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("args[%d]=%q, want %q (args=%v)", i, got[i], want[i], got)
+		}
+	}
+}
+
 func TestBackendNamesAndCommands(t *testing.T) {
-	tests := []Backend{CodexBackend{}, ClaudeBackend{}, GeminiBackend{}}
+	tests := []Backend{CodexBackend{}, ClaudeBackend{}, GeminiBackend{}, OpenCodeBackend{}}
 	expected := []struct {
 		name    string
 		command string
@@ -1653,6 +1696,7 @@ func TestBackendNamesAndCommands(t *testing.T) {
 		{"codex", "codex"},
 		{"claude", "claude"},
 		{"gemini", "gemini"},
+		{"opencode", "opencode"},
 	}
 
 	for i, backend := range tests {

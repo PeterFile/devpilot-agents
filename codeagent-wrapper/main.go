@@ -449,6 +449,9 @@ func run() (exitCode int) {
 	}
 
 	useStdin := cfg.ExplicitStdin || shouldUseStdin(taskText, piped)
+	if useStdin && !backend.SupportsStdin() {
+		useStdin = false
+	}
 
 	targetArg := taskText
 	if useStdin {
@@ -595,6 +598,8 @@ Parallel mode examples:
 Environment Variables:
     CODEX_TIMEOUT         Timeout in milliseconds (default: 7200000)
     CODEAGENT_ASCII_MODE  Use ASCII symbols instead of Unicode (PASS/WARN/FAIL)
+    CODEAGENT_OPENCODE_AGENT  opencode agent name (used by --backend opencode)
+    CODEAGENT_OPENCODE_MODEL  opencode model name (used by --backend opencode)
 
 Tmux Flags:
     --tmux-session <name>  Enable tmux visualization mode

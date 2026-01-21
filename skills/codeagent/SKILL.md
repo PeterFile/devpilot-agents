@@ -45,6 +45,7 @@ codeagent-wrapper --backend gemini "simple task"
 | codex | `--backend codex` | OpenAI Codex (default) | Code implementation, code review, complex analysis, orchestration |
 | claude | `--backend claude` | Anthropic Claude | Simple tasks, documentation, prompts |
 | gemini | `--backend gemini` | Google Gemini | UI/UX development, frontend components |
+| opencode | `--backend opencode` | OpenCode CLI (`opencode run`) | Agent-driven runs, inner-loop orchestration decisions |
 
 ### Backend Selection Guide
 

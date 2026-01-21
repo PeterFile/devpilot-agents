@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Backend defines the contract for invoking different AI CLI backends.
@@ -132,4 +133,82 @@ func buildGeminiArgs(cfg *Config, targetArg string) []string {
 	args = append(args, "-p", targetArg)
 
 	return args
+}
+
+type OpenCodeBackend struct{}
+
+func (OpenCodeBackend) Name() string    { return "opencode" }
+func (OpenCodeBackend) Command() string { return "opencode" }
+func (OpenCodeBackend) BuildArgs(cfg *Config, targetArg string) []string {
+	return buildOpenCodeArgs(cfg, targetArg)
+}
+func (OpenCodeBackend) SupportsStdin() bool { return false }
+
+func buildOpenCodeArgs(cfg *Config, _ string) []string {
+	if cfg == nil {
+		return nil
+	}
+
+	args := []string{"run", "--format", "json"}
+
+	if agent := strings.TrimSpace(os.Getenv("CODEAGENT_OPENCODE_AGENT")); agent != "" {
+		args = append(args, "--agent", agent)
+	}
+	if model := strings.TrimSpace(os.Getenv("CODEAGENT_OPENCODE_MODEL")); model != "" {
+		args = append(args, "--model", model)
+	}
+
+	if cfg.Mode == "resume" && strings.TrimSpace(cfg.SessionID) != "" {
+		args = append(args, "--session", strings.TrimSpace(cfg.SessionID))
+	}
+
+	for _, file := range extractOpencodeFiles(cfg.Task, cfg.WorkDir) {
+		args = append(args, "--file", file)
+	}
+
+	task := strings.TrimSpace(cfg.Task)
+	if task != "" {
+		args = append(args, task)
+	}
+	return args
+}
+
+func extractOpencodeFiles(taskText, workdir string) []string {
+	taskText = strings.TrimSpace(taskText)
+	if taskText == "" {
+		return nil
+	}
+
+	var files []string
+	seen := make(map[string]struct{})
+
+	for _, raw := range strings.Fields(taskText) {
+		token := strings.Trim(raw, "`,\"'()[]{}<>:;")
+		if !strings.HasPrefix(token, "@") {
+			continue
+		}
+		token = strings.TrimPrefix(token, "@")
+		token = strings.Trim(token, "`,\"'()[]{}<>:;")
+		if token == "" {
+			continue
+		}
+
+		looksLikePath := strings.ContainsAny(token, `/\.`)
+		if !looksLikePath {
+			if workdir == "" {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(workdir, token)); err != nil {
+				continue
+			}
+		}
+
+		if _, ok := seen[token]; ok {
+			continue
+		}
+		seen[token] = struct{}{}
+		files = append(files, token)
+	}
+
+	return files
 }

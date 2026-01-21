@@ -87,6 +87,10 @@ type UnifiedEvent struct {
 	Content string `json:"content,omitempty"`
 	Delta   *bool  `json:"delta,omitempty"`
 	Status  string `json:"status,omitempty"`
+
+	// OpenCode-specific fields
+	SessionIDAlt string          `json:"sessionID,omitempty"`
+	Part         json.RawMessage `json:"part,omitempty"` // Lazy parse
 }
 
 // ItemContent represents the parsed item.text field for Codex events
@@ -123,6 +127,7 @@ func parseJSONStreamInternal(r io.Reader, warnFn func(string), infoFn func(strin
 		codexMessage  string
 		claudeMessage string
 		geminiBuffer  strings.Builder
+		opencodeBuf   strings.Builder
 	)
 
 	for {
@@ -168,6 +173,8 @@ func parseJSONStreamInternal(r io.Reader, warnFn func(string), infoFn func(strin
 			isClaude = true
 		}
 		isGemini := event.Role != "" || event.Delta != nil || event.Status != ""
+
+		isOpencode := event.SessionIDAlt != "" || (len(event.Part) > 0 && (event.Type == "step_start" || event.Type == "tool_use" || event.Type == "text" || event.Type == "step_finish" || event.Type == "error"))
 
 		// Handle Codex events
 		if isCodex {
@@ -271,11 +278,53 @@ func parseJSONStreamInternal(r io.Reader, warnFn func(string), infoFn func(strin
 			continue
 		}
 
+		// Handle OpenCode events
+		if isOpencode {
+			if event.SessionIDAlt != "" && threadID == "" {
+				threadID = event.SessionIDAlt
+			}
+
+			infoFn(fmt.Sprintf("Parsed OpenCode event #%d type=%s part_len=%d", totalEvents, event.Type, len(event.Part)))
+
+			switch event.Type {
+			case "text":
+				if len(event.Part) > 0 {
+					var part struct {
+						Text string `json:"text"`
+					}
+					if err := json.Unmarshal(event.Part, &part); err == nil {
+						if part.Text != "" {
+							opencodeBuf.WriteString(part.Text)
+							notifyMessage()
+						}
+					}
+				}
+
+			case "step_finish":
+				if len(event.Part) > 0 {
+					var part struct {
+						Reason string `json:"reason"`
+					}
+					if err := json.Unmarshal(event.Part, &part); err == nil {
+						if part.Reason == "stop" {
+							notifyComplete()
+						}
+					}
+				}
+
+			case "error":
+				notifyComplete()
+			}
+			continue
+		}
+
 		// Unknown event format from other backends (turn.started/assistant/user); ignore.
 		continue
 	}
 
 	switch {
+	case opencodeBuf.Len() > 0:
+		message = opencodeBuf.String()
 	case geminiBuffer.Len() > 0:
 		message = geminiBuffer.String()
 	case claudeMessage != "":

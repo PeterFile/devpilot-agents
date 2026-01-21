@@ -9,7 +9,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude-Code-blue)](https://claude.ai/code)
 [![Version](https://img.shields.io/badge/Version-5.2-green)](https://github.com/cexll/myclaude)
 
-> AI-powered development automation with multi-backend execution (Codex/Claude/Gemini)
+> AI-powered development automation with multi-backend execution (Codex/Claude/Gemini/OpenCode)
 
 ## Core Concept: Multi-Backend Architecture
 
@@ -18,12 +18,12 @@ This system leverages a **dual-agent architecture** with pluggable AI backends:
 | Role | Agent | Responsibility |
 |------|-------|----------------|
 | **Orchestrator** | Claude Code | Planning, context gathering, verification, user interaction |
-| **Executor** | codeagent-wrapper | Code editing, test execution (Codex/Claude/Gemini backends) |
+| **Executor** | codeagent-wrapper | Code editing, test execution (Codex/Claude/Gemini/OpenCode backends) |
 
 **Why this separation?**
 - Claude Code excels at understanding context and orchestrating complex workflows
 - Specialized backends (Codex for code, Claude for reasoning, Gemini for prototyping) excel at focused execution
-- Backend selection via `--backend codex|claude|gemini` matches the model to the task
+- Backend selection via `--backend codex|claude|gemini|opencode` matches the model to the task
 
 ## Quick Start(Please execute in Powershell on Windows)
 
@@ -126,7 +126,7 @@ Requirements → Architecture → Sprint Plan → Development → Review → QA
 
 ## Enterprise Workflow Features
 
-- **Multi-backend execution:** `codeagent-wrapper --backend codex|claude|gemini` (default `codex`) so you can match the model to the task without changing workflows.
+- **Multi-backend execution:** `codeagent-wrapper --backend codex|claude|gemini|opencode` (default `codex`) so you can match the model to the task without changing workflows.
 - **GitHub workflow commands:** `/gh-create-issue "short need"` creates structured issues; `/gh-issue-implement 123` pulls issue #123, drives development, and prepares the PR.
 - **Skills + hooks activation:** .claude/hooks run automation (tests, reviews), while `.claude/skills/skill-rules.json` auto-suggests the right skills. Keep hooks enabled in `.claude/settings.json` to activate the enterprise workflow helpers.
 

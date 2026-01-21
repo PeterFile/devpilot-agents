@@ -228,9 +228,7 @@ func defaultRunCodexTaskFn(task TaskSpec, timeout int) TaskResult {
 	if task.Mode == "" {
 		task.Mode = "new"
 	}
-	if task.UseStdin || shouldUseStdin(task.Task, false) {
-		task.UseStdin = true
-	}
+	useStdin := task.UseStdin || shouldUseStdin(task.Task, false)
 
 	backendName := task.Backend
 	if backendName == "" {
@@ -242,6 +240,11 @@ func defaultRunCodexTaskFn(task TaskSpec, timeout int) TaskResult {
 		return TaskResult{TaskID: task.ID, ExitCode: 1, Error: err.Error()}
 	}
 	task.Backend = backend.Name()
+	if backend.SupportsStdin() && useStdin {
+		task.UseStdin = true
+	} else {
+		task.UseStdin = false
+	}
 
 	parentCtx := task.Context
 	if parentCtx == nil {

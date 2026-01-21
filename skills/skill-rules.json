@@ -38,7 +38,7 @@
         ],
         "intentPatterns": [
           "\\bcodeagent\\b",
-          "backend\\s+(codex|claude|gemini)",
+          "backend\\s+(codex|claude|gemini|opencode)",
           "parallel.*task",
           "multi.*backend"
         ]

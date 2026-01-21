@@ -53,6 +53,7 @@ EOF
 | **Codex** | `--backend codex` | General code tasks (default) |
 | **Claude** | `--backend claude` | Complex reasoning, architecture |
 | **Gemini** | `--backend gemini` | Fast iteration, prototyping |
+| **OpenCode** | `--backend opencode` | Orchestration decisions via `opencode run` |
 
 ## Core Features
 
@@ -267,6 +268,14 @@ EOF
 codeagent-wrapper --backend gemini "add TypeScript types to @api.js"
 ```
 
+**OpenCode:**
+```bash
+# Uses opencode CLI (machine-readable JSON events)
+CODEAGENT_OPENCODE_AGENT=king-arthur codeagent-wrapper --backend opencode - <<'EOF'
+Read @AGENT_STATE.json and output JSON only.
+EOF
+```
+
 ## Output Format
 
 Standard output includes parsed agent messages and session ID:
@@ -322,6 +331,8 @@ Error: dependency backend_1701234567 failed
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CODEX_TIMEOUT` | 7200000 | Timeout in milliseconds |
+| `CODEAGENT_OPENCODE_AGENT` | (empty) | `opencode run --agent <name>` |
+| `CODEAGENT_OPENCODE_MODEL` | (empty) | `opencode run --model <model>` |
 
 ## Troubleshooting
 
@@ -331,6 +342,7 @@ Error: dependency backend_1701234567 failed
 which codex
 which claude
 which gemini
+which opencode
 
 # Check PATH
 echo $PATH

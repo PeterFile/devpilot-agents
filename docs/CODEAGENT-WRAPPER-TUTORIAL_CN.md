@@ -47,7 +47,7 @@ go build -o ../bin/codeagent-wrapper .
 
 - `codeagent-wrapper "task" [workdir]`
 - `codeagent-wrapper - [workdir]`（从 stdin 读任务）
-- `codeagent-wrapper --backend codex|claude|gemini "task" [workdir]`
+- `codeagent-wrapper --backend codex|claude|gemini|opencode "task" [workdir]`
 
 PowerShell 示例（stdin）：
 
