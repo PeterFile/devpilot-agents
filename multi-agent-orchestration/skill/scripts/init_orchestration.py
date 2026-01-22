@@ -34,12 +34,7 @@ from spec_parser import (
 )
 
 
-# Legacy agent assignment by task type (Requirement 1.3, 11.5)
-AGENT_BY_TASK_TYPE = {
-    TaskType.CODE: "codex",
-    TaskType.UI: "gemini",
-    TaskType.REVIEW: "codex-review",
-}
+# Legacy agent mapping removed - Codex assigns owner_agent via Step 1b of SKILL.md
 
 # Legacy keywords for criticality detection (Requirement 11.6)
 SECURITY_KEYWORDS = ["security", "auth", "password", "token", "encrypt", "credential", "secret"]
@@ -143,14 +138,8 @@ def determine_criticality(task: Task) -> str:
 
 
 def assign_owner_agent(task: Task) -> str:
-    """
-    Assign owner agent based on task type.
-    
-    Legacy behavior: Codex should determine owner_agent in the orchestration phase.
-
-    Requirement 1.3, 11.5: Determine appropriate agent based on task type
-    """
-    return AGENT_BY_TASK_TYPE.get(task.task_type, "codex")
+    """Legacy fallback. Codex assigns owner_agent via Step 1b of SKILL.md."""
+    return "codex"
 
 
 def convert_task_to_entry(task: Task, include_decisions: bool = False) -> TaskEntry:

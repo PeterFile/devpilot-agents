@@ -25,7 +25,6 @@ from init_orchestration import (
     determine_criticality,
     convert_task_to_entry,
     initialize_orchestration,
-    AGENT_BY_TASK_TYPE,
 )
 
 
@@ -120,32 +119,30 @@ def dependency_graph_strategy(draw):
     return tasks
 
 
-# Property 2: Agent Assignment by Task Type
+# Property 2: Agent Assignment by Task Type - REMOVED
+# Now Codex assigns owner_agent via Step 1b of SKILL.md
+# assign_owner_agent() is a legacy fallback that always returns "codex"
 @given(task=task_strategy())
 @settings(max_examples=100, deadline=None)
 def test_property_2_agent_assignment_by_task_type(task):
     """
-    Property 2: Agent Assignment by Task Type
+    Property 2: Agent Assignment (Legacy Fallback)
     
-    For any task, the assigned owner_agent SHALL be:
-    - "codex" if task type is "code"
-    - "gemini" if task type is "ui"
-    - "codex-review" if task type is "review"
+    After refactoring, assign_owner_agent() always returns "codex".
+    Actual agent assignment happens in Codex Step 1b of SKILL.md.
     
     Feature: multi-agent-orchestration, Property 2
-    Validates: Requirements 1.3, 11.5
     """
     assigned_agent = assign_owner_agent(task)
-    expected_agent = AGENT_BY_TASK_TYPE[task.task_type]
-    
-    assert assigned_agent == expected_agent, \
-        f"Task type {task.task_type} should be assigned to {expected_agent}, got {assigned_agent}"
+    # Legacy fallback always returns codex
+    assert assigned_agent == "codex", \
+        f"Legacy assign_owner_agent should return 'codex', got {assigned_agent}"
 
 
 @given(task_type=task_type_strategy())
 @settings(max_examples=100, deadline=None)
 def test_agent_assignment_exhaustive(task_type):
-    """Test all task types have valid agent assignments."""
+    """Test all task types return 'codex' (legacy fallback)."""
     task = Task(
         task_id="1",
         description="Test task",
@@ -155,17 +152,8 @@ def test_agent_assignment_exhaustive(task_type):
     
     agent = assign_owner_agent(task)
     
-    # Verify agent is one of the valid agents
-    valid_agents = {"codex", "gemini", "codex-review"}
-    assert agent in valid_agents, f"Invalid agent: {agent}"
-    
-    # Verify correct mapping
-    if task_type == TaskType.CODE:
-        assert agent == "codex"
-    elif task_type == TaskType.UI:
-        assert agent == "gemini"
-    elif task_type == TaskType.REVIEW:
-        assert agent == "codex-review"
+    # Legacy fallback always returns codex regardless of task type
+    assert agent == "codex", f"Expected 'codex', got {agent}"
 
 
 # Property 3: Dependency-Based Blocking

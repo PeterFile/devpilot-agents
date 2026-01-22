@@ -1,6 +1,26 @@
 #!/bin/bash
 set -e
 
+detect_rc_file() {
+    local shell="${SHELL:-}"
+
+    local shell_name="${shell##*/}"
+    shell_name="${shell_name%% *}"
+    shell_name="${shell_name#-}"
+
+    case "$shell_name" in
+        zsh) echo "$HOME/.zshrc"; return 0 ;;
+        bash) echo "$HOME/.bashrc"; return 0 ;;
+    esac
+
+    echo "$HOME/.bashrc"
+}
+
+if [ "${1:-}" = "--print-rc-file" ]; then
+    detect_rc_file
+    exit 0
+fi
+
 if [ -z "${SKIP_WARNING:-}" ]; then
   echo "⚠️  WARNING: install.sh is LEGACY and will be removed in future versions."
   echo "Please use the new installation method:"
@@ -54,11 +74,7 @@ if [[ ":${PATH}:" != *":${BIN_DIR}:"* ]]; then
     echo "WARNING: ${BIN_DIR} is not in your PATH"
 
     # Detect shell config file
-    if [ -n "$ZSH_VERSION" ]; then
-        RC_FILE="$HOME/.zshrc"
-    else
-        RC_FILE="$HOME/.bashrc"
-    fi
+    RC_FILE="$(detect_rc_file)"
 
     # Idempotent add: check if complete export statement already exists
     EXPORT_LINE="export PATH=\"${BIN_DIR}:\$PATH\""

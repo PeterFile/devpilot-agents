@@ -11,5 +11,4 @@ coverage.out
 node_modules/
 dist/
 bin/
-claude_skills/
-ralph/
+

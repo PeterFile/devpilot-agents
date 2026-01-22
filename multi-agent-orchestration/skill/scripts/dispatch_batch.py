@@ -57,6 +57,33 @@ AGENT_TO_BACKEND = {
     "codex-review": "codex",
 }
 
+# Skill protocol for agent self-judgment
+# Uses psychological framing from "using-superpowers" pattern
+SKILL_PROTOCOL = """
+<SKILL-PROTOCOL>
+## [MANDATORY] Skill Check Before ANY Action
+
+If you think there is even a **1% chance** a skill might apply, you MUST invoke it.
+This is not negotiable. This is not optional.
+
+### Available Skills
+- **test-driven-development**: For ANY code changes (RED→GREEN→REFACTOR)
+
+### Red Flags - STOP if you think:
+| Thought | Reality |
+|---------|---------|
+| "This is simple, no skill needed" | Simple becomes complex. Use skill. |
+| "Let me write code first" | TDD means test BEFORE code. |
+| "I'll add tests later" | Later = never. RED→GREEN→REFACTOR. |
+
+### Skill Types
+**Rigid** (TDD): Follow exactly. No shortcuts. No adaptation.
+**Flexible** (patterns): Adapt principles to context.
+
+If writing production code → TDD is RIGID. No exceptions.
+</SKILL-PROTOCOL>
+""".strip()
+
 
 @dataclass
 class FileConflict:
@@ -655,6 +682,23 @@ def build_task_content(
     return _build_standalone_task_content(task, spec_path)
 
 
+def _build_skill_protocol_section(task: Dict[str, Any]) -> str:
+    """
+    Build skill protocol section for task prompt.
+    
+    Instructs agent to self-judge whether to apply skills.
+    Agent decides based on task context, not orchestrator.
+    
+    Args:
+        task: Task dictionary
+        
+    Returns:
+        Skill protocol section string
+    """
+    # Always include - Agent decides whether TDD applies
+    return "\n" + SKILL_PROTOCOL + "\n"
+
+
 def _build_standalone_task_content(task: Dict[str, Any], spec_path: str) -> str:
     """
     Build task content for a standalone task (no subtasks).
@@ -687,6 +731,9 @@ def _build_standalone_task_content(task: Dict[str, Any], spec_path: str) -> str:
         for detail in details:
             lines.append(f"- {detail}")
         lines.append("")
+    
+    # Add skill protocol for agent self-judgment
+    lines.append(_build_skill_protocol_section(task))
     
     return "\n".join(lines)
 
@@ -808,6 +855,9 @@ def _build_dispatch_unit_content(
     for idx, instruction in enumerate(instructions, start=1):
         lines.append(f"{idx}. {instruction}")
     lines.append("")
+    
+    # Add skill protocol for agent self-judgment
+    lines.append(_build_skill_protocol_section(task))
     
     return "\n".join(lines)
 

@@ -1,0 +1,6 @@
+[submodule "claude_skills"]
+	path = claude_skills
+	url = https://github.com/anthropics/skills.git
+[submodule "ralph"]
+	path = ralph
+	url = https://github.com/snarktank/ralph.git

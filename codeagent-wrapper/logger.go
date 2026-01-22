@@ -462,6 +462,9 @@ func cleanupOldLogs() (CleanupStats, error) {
 		}
 	}
 
+	stats.DeletedFiles = make([]string, 0, len(matches))
+	stats.KeptFiles = make([]string, 0, len(matches))
+
 	var removeErr error
 
 	for _, path := range matches {
@@ -478,7 +481,7 @@ func cleanupOldLogs() (CleanupStats, error) {
 			continue
 		}
 
-		pid, ok := parsePIDFromLog(path)
+		pid, ok := parsePIDFromLogWithPrefixes(path, prefixes)
 		if !ok {
 			stats.Kept++
 			stats.KeptFiles = append(stats.KeptFiles, filename)
@@ -553,6 +556,14 @@ func isUnsafeFile(path string, tempDir string) (bool, string) {
 		return true, "refusing to delete symlink"
 	}
 
+	// Fast path: wrapper log files are direct children of TempDir; avoid expensive
+	// resolution when the path is already clearly within that directory.
+	cleanTempDir := filepath.Clean(tempDir)
+	cleanPath := filepath.Clean(path)
+	if filepath.IsAbs(cleanPath) && filepath.Dir(cleanPath) == cleanTempDir {
+		return false, ""
+	}
+
 	// Resolve any path traversal and verify it's within tempDir
 	resolvedPath, err := evalSymlinksFn(path)
 	if err != nil {
@@ -603,8 +614,15 @@ func isPIDReused(logPath string, pid int) bool {
 }
 
 func parsePIDFromLog(path string) (int, bool) {
-	name := filepath.Base(path)
 	prefixes := logPrefixes()
+	if len(prefixes) == 0 {
+		prefixes = []string{defaultWrapperName}
+	}
+	return parsePIDFromLogWithPrefixes(path, prefixes)
+}
+
+func parsePIDFromLogWithPrefixes(path string, prefixes []string) (int, bool) {
+	name := filepath.Base(path)
 	if len(prefixes) == 0 {
 		prefixes = []string{defaultWrapperName}
 	}

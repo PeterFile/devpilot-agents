@@ -216,22 +216,8 @@ STATUS_MARKERS = {
     "[~]": TaskStatus.BLOCKED,
 }
 
-# Keywords for task type detection
-UI_KEYWORDS = ["ui", "frontend", "component", "form", "page", "style", "css", "react", "vue"]
-
-
-def _detect_task_type(description: str, details: List[str]) -> TaskType:
-    """Detect task type based on description and details."""
-    text = (description + " " + " ".join(details)).lower()
-    
-    if "review" in text and ("property test" in text or "audit" in text):
-        return TaskType.REVIEW
-    
-    for keyword in UI_KEYWORDS:
-        if keyword in text:
-            return TaskType.UI
-    
-    return TaskType.CODE
+# Task type detection removed - Codex assigns type via Step 1b of SKILL.md
+# TaskType enum and Task.task_type field retained for backward compatibility
 
 
 def _parse_task_line(line: str) -> Tuple[Optional[str], TaskStatus, bool, str]:
@@ -295,7 +281,7 @@ def parse_tasks(content: str) -> TasksParseResult:
             # Save previous task
             if current_task:
                 current_task.details = current_details
-                current_task.task_type = _detect_task_type(current_task.description, current_details)
+                # task_type defaults to CODE; Codex assigns type via Step 1b
                 # Extract file manifest from details (Requirement 2.2)
                 writes, reads = _extract_file_manifest(current_details)
                 current_task.writes = writes
@@ -333,7 +319,7 @@ def parse_tasks(content: str) -> TasksParseResult:
     # Don't forget the last task
     if current_task:
         current_task.details = current_details
-        current_task.task_type = _detect_task_type(current_task.description, current_details)
+        # task_type defaults to CODE; Codex assigns type via Step 1b
         # Extract file manifest from details (Requirement 2.2)
         writes, reads = _extract_file_manifest(current_details)
         current_task.writes = writes
