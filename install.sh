@@ -43,7 +43,7 @@ case "$ARCH" in
 esac
 
 # Build download URL
-REPO="cexll/myclaude"
+REPO="PeterFile/devpilot-agents"
 VERSION="latest"
 BINARY_NAME="codeagent-wrapper-${OS}-${ARCH}"
 URL="https://github.com/${REPO}/releases/${VERSION}/download/${BINARY_NAME}"

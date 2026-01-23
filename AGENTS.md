@@ -1,33 +1,55 @@
-# Repository Guidelines
+# AGENTS.md
 
-## Project Structure & Module Organization
-This repo packages a multi-backend workflow system. Key paths:
-- `codeagent-wrapper/` Go CLI wrapper (main runtime).
-- Workflow packs: `dev-workflow/`, `development-essentials/`, `bmad-agile-workflow/`, `requirements-driven-workflow/` with `commands/` and `agents/`.
-- Shared resources: `skills/`, `hooks/`, `scripts/`, `docs/`, `memorys/`.
-- Install/config: `install.py`, `install.sh`, `config.json`, `config.schema.json`, `Makefile`.
+Multi-agent orchestration framework for complex software engineering tasks.
 
-## Build, Test, and Development Commands
-- `python3 install.py --install-dir ~/.claude` installs the default modules.
-- `python3 install.py --module dev` installs a single module.
-- `make deploy-essentials` or `make deploy-bmad` copies commands/agents into `~/.claude`.
-- `go test ./codeagent-wrapper/...` runs Go tests from the repo root (workspace). You can also run `go test ./...` inside `codeagent-wrapper/`.
-- `make changelog` updates `CHANGELOG.md` via `git-cliff`.
+## Setup commands
 
-## Coding Style & Naming Conventions
-- Go: format with `gofmt`; keep files in `codeagent-wrapper/` and tests named `*_test.go`.
-- Markdown: workflow docs live under `*/commands/` and `*/agents/` using kebab-case filenames (e.g., `bmad-pilot.md`).
-- JSON: keep schemas/instances valid; pre-commit uses `jq` for validation.
+- Install skills: `npx skills add PeterFile/devpilot-agents`
+- Build wrapper: `cd codeagent-wrapper && go build -o codeagent-wrapper .`
+- Run Go tests: `cd codeagent-wrapper && go test -v ./...`
+- Run Python tests: `cd skills/multi-agent-orchestration/scripts && python -m pytest -v`
 
-## Testing Guidelines
-- Use `(cd codeagent-wrapper && go test ./... -short)` for quick validation (mirrors `hooks/pre-commit.sh`).
-- Add unit tests for new behavior and integration tests when touching CLI orchestration (see `*_integration_test.go` patterns).
+## Project structure
 
-## Commit & Pull Request Guidelines
-- Follow Conventional Commits with optional scope: `feat(dev-workflow): ...`, `fix: ...`, `docs: ...`.
-- PRs should include: concise summary, tests run, and any workflow/module impact; link issues when relevant.
-- If you change user-facing commands or install flow, update matching docs in `docs/` or `README.md`.
+- `skills/multi-agent-orchestration/` - Core orchestration skill with Python scripts
+- `skills/kiro-specs/` - Spec-driven workflow skill (requirements → design → tasks)
+- `skills/test-driven-development/` - TDD skill
+- `codeagent-wrapper/` - Go execution engine for parallel task dispatch
+- `.opencode/agents/` - Agent definitions (king-arthur.md, gawain.md)
 
-## Automation & Hooks
-- `hooks/pre-commit.sh` checks `gofmt`, runs `go test -short`, and validates JSON.
-- Keep hook behavior in sync with repo conventions; update `hooks/hooks-config.json` if adding new hooks.
+## Code style
+
+### Go (codeagent-wrapper/)
+
+- Go 1.21+
+- Standard library preferred
+- Error handling: return errors, don't panic
+- Use `go fmt` and `go vet`
+
+### Python (skills/\*/scripts/)
+
+- Python 3.x
+- Type hints encouraged
+- Use pytest for testing
+- Follow existing module patterns
+
+## Testing
+
+- Go: `go test -v ./...` in `codeagent-wrapper/`
+- Python: `python -m pytest -v` in script directories
+- Integration: `pytest test_e2e_orchestration.py`
+
+## Key files
+
+- `skills/multi-agent-orchestration/SKILL.md` - Orchestrator skill definition
+- `skills/multi-agent-orchestration/scripts/orchestration_loop.py` - Main loop runner
+- `skills/multi-agent-orchestration/references/agent-state-schema.json` - State schema
+
+## Workflow
+
+The orchestration workflow follows: init → dispatch → review → consolidate → sync
+
+1. Parse Kiro spec (`tasks.md`) into `AGENT_STATE.json`
+2. Dispatch tasks to Codex (code) or Gemini (UI) backends
+3. Review changes with codex-review
+4. Consolidate and sync to `PROJECT_PULSE.md`

@@ -1,448 +1,97 @@
-# Claude Code 多智能体工作流系统
+# DevPilot Agents: 多代理编排框架
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Claude Code](https://img.shields.io/badge/Claude-Code-blue)](https://claude.ai/code)
-[![Version](https://img.shields.io/badge/Version-5.2-green)](https://github.com/cexll/myclaude)
+> **"亚瑟王的王者之剑已破石而出……你是否愿随王一同奔赴疆场？"**
 
-> AI 驱动的开发自动化 - 多后端执行架构 (Codex/Claude/Gemini/OpenCode)
+专为复杂软件工程任务设计的高保真 **多代理编排系统**。借鉴"圆桌会议"哲学，由 **亚瑟王** (编排者) 协调专业代理，大规模地实现、评审并同步代码库变更。
 
-## 核心概念：多后端架构
+## 核心架构：圆桌会议
 
-本系统采用**双智能体架构**与可插拔 AI 后端：
+| 角色                     | 代理     | 职责                                    |
+| :----------------------- | :------- | :-------------------------------------- |
+| **亚瑟王 (King Arthur)** | 编排者   | 规划、授权、质量门禁及项目状态同步。    |
+| **高文 (Gawain)**        | 决策骑士 | 内环决策、严格的 JSON 输出及逻辑验证。  |
+| **Codex/Gemini**         | 执行者   | 分布式执行代码 (Codex) 与 UI (Gemini)。 |
+| **codeagent-wrapper**    | 执行层   | 驱动后端并行运行的 Go 运行时。          |
 
-| 角色 | 智能体 | 职责 |
-|------|-------|------|
-| **编排者** | Claude Code | 规划、上下文收集、验证、用户交互 |
-| **执行者** | codeagent-wrapper | 代码编辑、测试执行（Codex/Claude/Gemini/OpenCode 后端）|
+## 前置要求
 
-**为什么分离？**
-- Claude Code 擅长理解上下文和编排复杂工作流
-- 专业后端（Codex 擅长代码、Claude 擅长推理、Gemini 擅长原型）专注执行
-- 通过 `--backend codex|claude|gemini|opencode` 匹配模型与任务
+- **Go 1.21+**：编译 `codeagent-wrapper` 必需
+- **Claude Code / OpenCode**：触发技能所需的环境
 
-## 快速开始（windows上请在Powershell中执行）
+## 安装步骤
 
-```bash
-git clone https://github.com/cexll/myclaude.git
-cd myclaude
-python3 install.py --install-dir ~/.claude
-```
-
-## 工作流概览
-
-### 1. Dev 工作流（推荐）
-
-**大多数开发任务的首选工作流。**
+### 步骤 1：安装技能
 
 ```bash
-/dev "实现 JWT 用户认证"
+npx skills add PeterFile/devpilot-agents
 ```
 
-**6 步流程：**
-1. **需求澄清** - 交互式问答明确范围
-2. **Codex 深度分析** - 代码库探索和架构决策
-3. **开发计划生成** - 结构化任务分解和测试要求
-4. **并行执行** - Codex 并发执行任务
-5. **覆盖率验证** - 强制 ≥90% 测试覆盖率
-6. **完成总结** - 文件变更和覆盖率报告
+此命令将本仓库的所有技能安装到你的代理环境中。
 
-**核心特性：**
-- Claude Code 编排，Codex 执行所有代码变更
-- 自动任务并行化提升速度
-- 强制 90% 测试覆盖率门禁
-- 失败自动回滚
-
-**适用场景：** 功能开发、重构、带测试的 bug 修复
-
----
-
-### 2. BMAD 敏捷工作流
-
-**包含 6 个专业智能体的完整企业敏捷方法论。**
+### 步骤 2：编译 codeagent-wrapper
 
 ```bash
-/bmad-pilot "构建电商结账系统"
+git clone https://github.com/PeterFile/devpilot-agents.git
+cd devpilot-agents/codeagent-wrapper
+go build -o codeagent-wrapper .
 ```
 
-**智能体角色：**
-| 智能体 | 职责 |
-|-------|------|
-| Product Owner | 需求与用户故事 |
-| Architect | 系统设计与技术决策 |
-| Tech Lead | Sprint 规划与任务分解 |
-| Developer | 实现 |
-| Code Reviewer | 质量保证 |
-| QA Engineer | 测试与验证 |
+Windows：
 
-**流程：**
-```
-需求 → 架构 → Sprint计划 → 开发 → 审查 → QA
- ↓      ↓       ↓         ↓      ↓      ↓
-PRD.md DESIGN.md SPRINT.md Code REVIEW.md TEST.md
+```powershell
+go build -o codeagent-wrapper.exe .
 ```
 
-**适用场景：** 大型功能、团队协作、企业项目
+### 步骤 3：添加到 PATH
 
----
-
-### 3. 需求驱动工作流
-
-**轻量级需求到代码流水线。**
+**Linux/macOS：**
 
 ```bash
-/requirements-pilot "实现 API 限流"
+export PATH="$PWD:$PATH"
 ```
 
-**流程：**
-1. 带质量评分的需求生成
-2. 实现规划
-3. 代码生成
-4. 审查和测试
+**Windows (PowerShell)：**
 
-**适用场景：** 快速原型、明确定义的功能
-
----
-
-### 4. 开发基础命令
-
-**日常编码任务的直接命令。**
-
-| 命令 | 用途 |
-|------|------|
-| `/code` | 实现功能 |
-| `/debug` | 调试问题 |
-| `/test` | 编写测试 |
-| `/review` | 代码审查 |
-| `/optimize` | 性能优化 |
-| `/refactor` | 代码重构 |
-| `/docs` | 编写文档 |
-
-**适用场景：** 快速任务，无需工作流开销
-
----
-
-## 安装
-
-### 模块化安装（推荐）
-
-```bash
-# 安装所有启用的模块（默认：dev + essentials）
-python3 install.py --install-dir ~/.claude
-
-# 安装特定模块
-python3 install.py --module dev
-
-# 列出可用模块
-python3 install.py --list-modules
-
-# 强制覆盖现有文件
-python3 install.py --force
+```powershell
+$env:PATH = "$PWD;$env:PATH"
 ```
 
-### 可用模块
+## 使用技能
 
-| 模块 | 默认 | 描述 |
-|------|------|------|
-| `dev` | ✓ 启用 | Dev 工作流 + Codex 集成 |
-| `essentials` | ✓ 启用 | 核心开发命令 |
-| `bmad` | 禁用 | 完整 BMAD 敏捷工作流 |
-| `requirements` | 禁用 | 需求驱动工作流 |
+在 Claude Code / OpenCode 中描述任务即可自动触发技能：
 
-### 安装内容
+| 触发示例                                                    | 技能                     |
+| ----------------------------------------------------------- | ------------------------ |
+| "Start orchestration from spec at `.kiro/specs/my-feature`" | multi-agent-orchestrator |
+| "Run orchestration for `payment-integration`"               | multi-agent-orchestrator |
+| "Create requirements for a new feature"                     | kiro-specs               |
+| "Help me write tests first"                                 | test-driven-development  |
+
+### 可用技能
+
+| 技能                         | 描述                                      |
+| ---------------------------- | ----------------------------------------- |
+| **multi-agent-orchestrator** | 从 Kiro 规范编排多代理工作流              |
+| **kiro-specs**               | 规范驱动工作流：需求 → 设计 → 任务 → 执行 |
+| **test-driven-development**  | 红-绿-重构 TDD 工作流                     |
+
+## 项目结构
 
 ```
-~/.claude/
-├── bin/
-│   └── codeagent-wrapper    # 主可执行文件
-├── CLAUDE.md                # 核心指令和角色定义
-├── commands/                # 斜杠命令 (/dev, /code 等)
-├── agents/                  # 智能体定义
 ├── skills/
-│   └── codex/
-│       └── SKILL.md         # Codex 集成技能
-├── config.json              # 配置文件
-└── installed_modules.json   # 安装状态
+│   ├── multi-agent-orchestration/   # 核心编排技能
+│   ├── kiro-specs/                  # 规格驱动工作流技能
+│   └── test-driven-development/     # TDD 技能
+├── .opencode/agents/                # 代理定义
+├── codeagent-wrapper/               # Go 执行引擎
+└── docs/                            # 文档
 ```
 
-### 自定义安装目录
+## 文档
 
-默认情况下，myclaude 安装到 `~/.claude`。您可以使用 `INSTALL_DIR` 环境变量自定义安装目录：
-
-```bash
-# 安装到自定义目录
-INSTALL_DIR=/opt/myclaude bash install.sh
-
-# 相应更新您的 PATH
-export PATH="/opt/myclaude/bin:$PATH"
-```
-
-**目录结构：**
-- `$INSTALL_DIR/bin/` - codeagent-wrapper 可执行文件
-- `$INSTALL_DIR/skills/` - 技能定义
-- `$INSTALL_DIR/config.json` - 配置文件
-- `$INSTALL_DIR/commands/` - 斜杠命令定义
-- `$INSTALL_DIR/agents/` - 智能体定义
-
-**注意：** 使用自定义安装目录时，请确保将 `$INSTALL_DIR/bin` 添加到您的 `PATH` 环境变量中。
-
-### 配置
-
-编辑 `config.json` 自定义：
-
-```json
-{
-  "version": "1.0",
-  "install_dir": "~/.claude",
-  "modules": {
-    "dev": {
-      "enabled": true,
-      "operations": [
-        {"type": "merge_dir", "source": "dev-workflow"},
-        {"type": "copy_file", "source": "memorys/CLAUDE.md", "target": "CLAUDE.md"},
-        {"type": "copy_file", "source": "skills/codex/SKILL.md", "target": "skills/codex/SKILL.md"},
-        {"type": "run_command", "command": "bash install.sh"}
-      ]
-    }
-  }
-}
-```
-
-**操作类型：**
-| 类型 | 描述 |
-|------|------|
-| `merge_dir` | 合并子目录 (commands/, agents/) 到安装目录 |
-| `copy_dir` | 复制整个目录 |
-| `copy_file` | 复制单个文件到目标路径 |
-| `run_command` | 执行 shell 命令 |
+- **[架构说明 (docs/ARCHITECTURE_CN.md)](docs/ARCHITECTURE_CN.md)**：圆桌会议代理协作机制。
+- **[快速开始 (docs/QUICK-START_CN.md)](docs/QUICK-START_CN.md)**：入门指南。
 
 ---
 
-## Codex 集成
-
-`codex` 技能使 Claude Code 能够将代码执行委托给 Codex CLI。
-
-### 工作流中的使用
-
-```bash
-# 通过技能调用 Codex
-codeagent-wrapper - <<'EOF'
-在 @src/auth.ts 中实现 JWT 验证
-EOF
-```
-
-### 并行执行
-
-```bash
-codeagent-wrapper --parallel <<'EOF'
----TASK---
-id: backend_api
-workdir: /project/backend
----CONTENT---
-实现 /api/users 的 REST 端点
-
----TASK---
-id: frontend_ui
-workdir: /project/frontend
-dependencies: backend_api
----CONTENT---
-创建消费 API 的 React 组件
-EOF
-```
-
-### 安装 Codex Wrapper
-
-```bash
-# 自动（通过 dev 模块）
-python3 install.py --module dev
-
-# 手动
-bash install.sh
-```
-
-#### Windows 系统
-
-Windows 系统会将 `codeagent-wrapper.exe` 安装到 `%USERPROFILE%\bin`。
-
-```powershell
-# PowerShell（推荐）
-powershell -ExecutionPolicy Bypass -File install.ps1
-
-# 批处理（cmd）
-install.bat
-```
-
-**添加到 PATH**（如果安装程序未自动检测）：
-
-```powershell
-# PowerShell - 永久添加（当前用户）
-[Environment]::SetEnvironmentVariable('PATH', "$HOME\bin;" + [Environment]::GetEnvironmentVariable('PATH','User'), 'User')
-
-# PowerShell - 仅当前会话
-$Env:PATH = "$HOME\bin;$Env:PATH"
-```
-
-```batch
-REM cmd.exe - 永久添加（当前用户）（建议使用上面的 PowerShell 方法）
-REM 警告：此命令会展开 %PATH% 包含系统 PATH，导致重复
-REM 注意：使用 reg add 而非 setx 以避免 1024 字符截断限制
-reg add "HKCU\Environment" /v Path /t REG_EXPAND_SZ /d "%USERPROFILE%\bin;%PATH%" /f
-```
-
----
-
-## 工作流选择指南
-
-| 场景 | 推荐工作流 |
-|------|----------|
-| 带测试的新功能 | `/dev` |
-| 快速 bug 修复 | `/debug` 或 `/code` |
-| 大型多 Sprint 功能 | `/bmad-pilot` |
-| 原型或 POC | `/requirements-pilot` |
-| 代码审查 | `/review` |
-| 性能问题 | `/optimize` |
-
----
-
-## 故障排查
-
-### 常见问题
-
-**Codex wrapper 未找到：**
-```bash
-# 安装程序会自动添加 PATH，检查是否已添加
-if [[ ":$PATH:" != *":$HOME/.claude/bin:"* ]]; then
-    echo "PATH not configured. Reinstalling..."
-    bash install.sh
-fi
-
-# 或手动添加（幂等性命令）
-[[ ":$PATH:" != *":$HOME/.claude/bin:"* ]] && echo 'export PATH="$HOME/.claude/bin:$PATH"' >> ~/.zshrc
-```
-
-**权限被拒绝：**
-```bash
-python3 install.py --install-dir ~/.claude --force
-```
-
-**模块未加载：**
-```bash
-# 检查安装状态
-cat ~/.claude/installed_modules.json
-
-# 重新安装特定模块
-python3 install.py --module dev --force
-```
-
----
-
-## 常见问题 (FAQ)
-
-### Q1: `codeagent-wrapper` 执行时报错 "Unknown event format"
-
-**问题描述：**
-执行 `codeagent-wrapper` 时出现错误：
-```
-Unknown event format: {"type":"turn.started"}
-Unknown event format: {"type":"assistant", ...}
-```
-
-**解决方案：**
-这是日志事件流的显示问题，不影响实际功能执行。预计在下个版本中修复。如需排查其他问题，可忽略此日志输出。
-
-**相关 Issue：** [#96](https://github.com/cexll/myclaude/issues/96)
-
----
-
-### Q2: Gemini 无法读取 `.gitignore` 忽略的文件
-
-**问题描述：**
-使用 `codeagent-wrapper --backend gemini` 时，无法读取 `.claude/` 等被 `.gitignore` 忽略的目录中的文件。
-
-**解决方案：**
-- **方案一：** 在项目根目录的 `.gitignore` 中取消对 `.claude/` 的忽略
-- **方案二：** 确保需要读取的文件不在 `.gitignore` 忽略列表中
-
-**相关 Issue：** [#75](https://github.com/cexll/myclaude/issues/75)
-
----
-
-### Q3: `/dev` 命令并行执行特别慢
-
-**问题描述：**
-使用 `/dev` 命令开发简单功能耗时过长（超过30分钟），无法了解任务执行状态。
-
-**解决方案：**
-1. **检查日志：** 查看 `C:\Users\User\AppData\Local\Temp\codeagent-wrapper-*.log` 分析瓶颈
-2. **调整后端：**
-   - 尝试使用 `gpt-5.1-codex-max` 等更快的模型
-   - 在 WSL 环境下运行速度可能更快
-3. **工作区选择：** 使用独立的代码仓库而非包含多个子项目的 monorepo
-
-**相关 Issue：** [#77](https://github.com/cexll/myclaude/issues/77)
-
----
-
-### Q4: 新版 Go 实现的 Codex 权限不足
-
-**问题描述：**
-升级到新版 Go 实现的 Codex 后，出现权限不足的错误。
-
-**解决方案：**
-在 `~/.codex/config.yaml` 中添加以下配置（Windows: `c:\user\.codex\config.toml`）：
-```yaml
-model = "gpt-5.1-codex-max"
-model_reasoning_effort = "high"
-model_reasoning_summary = "detailed"
-approval_policy = "never"
-sandbox_mode = "workspace-write"
-disable_response_storage = true
-network_access = true
-```
-
-**关键配置说明：**
-- `approval_policy = "never"` - 移除审批限制
-- `sandbox_mode = "workspace-write"` - 允许工作区写入权限
-- `network_access = true` - 启用网络访问
-
-**相关 Issue：** [#31](https://github.com/cexll/myclaude/issues/31)
-
----
-
-### Q5: 执行时遇到权限拒绝或沙箱限制
-
-**问题描述：**
-运行 codeagent-wrapper 时出现权限错误或沙箱限制。
-
-**解决方案：**
-设置以下环境变量：
-```bash
-export CODEX_BYPASS_SANDBOX=true
-export CODEAGENT_SKIP_PERMISSIONS=true
-```
-
-或添加到 shell 配置文件（`~/.zshrc` 或 `~/.bashrc`）：
-```bash
-echo 'export CODEX_BYPASS_SANDBOX=true' >> ~/.zshrc
-echo 'export CODEAGENT_SKIP_PERMISSIONS=true' >> ~/.zshrc
-```
-
-**注意：** 这些设置会绕过安全限制，请仅在可信环境中使用。
-
----
-
-**仍有疑问？** 请访问 [GitHub Issues](https://github.com/cexll/myclaude/issues) 搜索或提交新问题。
-
----
-
-## 许可证
-
-AGPL-3.0 License - 查看 [LICENSE](LICENSE)
-
-## 支持
-
-- **问题反馈**: [GitHub Issues](https://github.com/cexll/myclaude/issues)
-- **文档**: [docs/](docs/)
-
----
-
-**Claude Code + Codex = 更好的开发** - 编排遇见执行。
+**Claude Code + 分布式编排 = 自主工程的未来。**
