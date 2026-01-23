@@ -87,6 +87,20 @@ Skills are triggered automatically when you describe your task in natural langua
 └── docs/                            # Documentation
 ```
 
+## Flowchart
+
+[![Multi-Agent Orchestration Flowchart](flowchart.png)](https://peterfile.github.io/devpilot-agents/)
+
+**[View Interactive Flowchart](https://peterfile.github.io/devpilot-agents/)** - Click through to see each step with animations.
+
+The `flowchart/` directory contains the source code. To run locally:
+
+```bash
+cd flowchart
+npm install
+npm run dev
+```
+
 ## Documentation
 
 - **[Architecture (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)**: The Round Table agent collaboration.

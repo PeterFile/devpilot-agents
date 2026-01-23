@@ -87,6 +87,20 @@ $env:PATH = "$PWD;$env:PATH"
 └── docs/                            # 文档
 ```
 
+## 流程图
+
+[![多代理编排流程图](flowchart.png)](https://peterfile.github.io/devpilot-agents/)
+
+**[查看交互式流程图](https://peterfile.github.io/devpilot-agents/)** - 点击逐步查看动画演示。
+
+`flowchart/` 目录包含源代码。本地运行：
+
+```bash
+cd flowchart
+npm install
+npm run dev
+```
+
 ## 文档
 
 - **[架构说明 (docs/ARCHITECTURE_CN.md)](docs/ARCHITECTURE_CN.md)**：圆桌会议代理协作机制。
