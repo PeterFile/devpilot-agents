@@ -1,3 +1,5 @@
+[中文版](ARCHITECTURE_CN.md) | English
+
 # Multi-Agent Architecture: The Round Table
 
 This document explains the collaborative architecture between agents in the orchestration system.

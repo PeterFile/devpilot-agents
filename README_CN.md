@@ -1,3 +1,5 @@
+中文 | [English](README.md)
+
 # DevPilot Agents: 多代理编排框架
 
 > **"亚瑟王的王者之剑已破石而出……你是否愿随王一同奔赴疆场？"**
@@ -105,6 +107,16 @@ npm run dev
 
 - **[架构说明 (docs/ARCHITECTURE_CN.md)](docs/ARCHITECTURE_CN.md)**：圆桌会议代理协作机制。
 - **[快速开始 (docs/QUICK-START_CN.md)](docs/QUICK-START_CN.md)**：入门指南。
+
+## 致谢
+
+本项目基于以下优秀开源项目构建：
+
+| 组件                  | 来源                                                |
+| --------------------- | --------------------------------------------------- |
+| **codeagent-wrapper** | [cexll/myclaude](https://github.com/cexll/myclaude) |
+| **编排循环思路**      | [ralph](https://github.com/snarktank/ralph)                                     |
+| **Skills 规范**       | [claude_skills](https://github.com/anthropics/skills)                     |
 
 ---
 

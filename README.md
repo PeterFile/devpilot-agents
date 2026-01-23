@@ -1,3 +1,5 @@
+[中文版](README_CN.md) | English
+
 # DevPilot Agents: Multi-Agent Orchestration Framework
 
 > **"Arthur's Excalibur is drawn from the stone... Will you march forth into battle beside your King?"**
@@ -105,6 +107,16 @@ npm run dev
 
 - **[Architecture (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)**: The Round Table agent collaboration.
 - **[Quick Start Guide (docs/QUICK-START.md)](docs/QUICK-START.md)**: Getting started.
+
+## Acknowledgments
+
+This project builds upon the work of several excellent open-source projects:
+
+| Component                | Source                                              |
+| ------------------------ | --------------------------------------------------- |
+| **codeagent-wrapper**    | [cexll/myclaude](https://github.com/cexll/myclaude) |
+| **Orchestration Loop**   | [ralph](https://github.com/snarktank/ralph)                                     |
+| **Skills Specification** | [claude_skills](https://github.com/anthropics/skills)                     |
 
 ---
 

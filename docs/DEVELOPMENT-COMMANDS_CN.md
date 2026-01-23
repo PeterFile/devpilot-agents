@@ -1,3 +1,5 @@
+中文 | [English](DEVELOPMENT-COMMANDS.md)
+
 # 开发命令参考
 
 > 多代理编排框架的技能和命令。

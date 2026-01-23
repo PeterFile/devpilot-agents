@@ -1,3 +1,5 @@
+中文 | [English](CODEAGENT-WRAPPER.md)
+
 # codeagent-wrapper：执行引擎
 
 多代理编排框架的 Go 运行时。提供统一的跨平台接口，用于跨多个 AI 后端的并行代码执行。

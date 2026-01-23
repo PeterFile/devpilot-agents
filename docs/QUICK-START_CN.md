@@ -1,3 +1,5 @@
+中文 | [English](QUICK-START.md)
+
 # 快速入门指南
 
 > 快速上手多代理编排框架。
