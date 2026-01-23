@@ -58,6 +58,22 @@ export PATH="$PWD:$PATH"
 $env:PATH = "$PWD;$env:PATH"
 ```
 
+### 步骤 4：配置 OpenCode 代理（仅 OpenCode）
+
+将代理定义复制到你的项目：
+
+```bash
+cp -r .opencode/agents/ <你的项目>/.opencode/agents/
+```
+
+或全局安装（对所有项目生效）：
+
+```bash
+cp -r .opencode/agents/ ~/.config/opencode/agents/
+```
+
+这将添加 **亚瑟王** (编排者) 和 **高文** (决策骑士) 到你的 OpenCode 环境。
+
 ## 使用技能
 
 在 Claude Code / OpenCode 中描述任务即可自动触发技能：
@@ -112,11 +128,11 @@ npm run dev
 
 本项目基于以下优秀开源项目构建：
 
-| 组件                  | 来源                                                |
-| --------------------- | --------------------------------------------------- |
-| **codeagent-wrapper** | [cexll/myclaude](https://github.com/cexll/myclaude) |
-| **编排循环思路**      | [ralph](https://github.com/snarktank/ralph)                                     |
-| **Skills 规范**       | [claude_skills](https://github.com/anthropics/skills)                     |
+| 组件                  | 来源                                                  |
+| --------------------- | ----------------------------------------------------- |
+| **codeagent-wrapper** | [cexll/myclaude](https://github.com/cexll/myclaude)   |
+| **编排循环思路**      | [ralph](https://github.com/snarktank/ralph)           |
+| **Skills 规范**       | [claude_skills](https://github.com/anthropics/skills) |
 
 ---
 

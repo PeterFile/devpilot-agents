@@ -58,6 +58,22 @@ export PATH="$PWD:$PATH"
 $env:PATH = "$PWD;$env:PATH"
 ```
 
+### Step 4: Configure OpenCode Agents (OpenCode only)
+
+Copy the agent definitions to your project:
+
+```bash
+cp -r .opencode/agents/ <your-project>/.opencode/agents/
+```
+
+Or install globally for all projects:
+
+```bash
+cp -r .opencode/agents/ ~/.config/opencode/agents/
+```
+
+This adds **King Arthur** (orchestrator) and **Gawain** (decision knight) to your OpenCode environment.
+
 ## Using Skills
 
 Skills are triggered automatically when you describe your task in natural language:
@@ -112,11 +128,11 @@ npm run dev
 
 This project builds upon the work of several excellent open-source projects:
 
-| Component                | Source                                              |
-| ------------------------ | --------------------------------------------------- |
-| **codeagent-wrapper**    | [cexll/myclaude](https://github.com/cexll/myclaude) |
-| **Orchestration Loop**   | [ralph](https://github.com/snarktank/ralph)                                     |
-| **Skills Specification** | [claude_skills](https://github.com/anthropics/skills)                     |
+| Component                | Source                                                |
+| ------------------------ | ----------------------------------------------------- |
+| **codeagent-wrapper**    | [cexll/myclaude](https://github.com/cexll/myclaude)   |
+| **Orchestration Loop**   | [ralph](https://github.com/snarktank/ralph)           |
+| **Skills Specification** | [claude_skills](https://github.com/anthropics/skills) |
 
 ---
 
