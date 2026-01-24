@@ -112,6 +112,28 @@ npm install
 npm run dev
 ```
 
+## Auto-Loop Mechanism
+
+Core entry point: [`orchestration_loop.py`](skills/multi-agent-orchestration/scripts/orchestration_loop.py)
+
+Uses `codeagent-wrapper` to call LLM backends (default: `opencode`). Each iteration:
+
+1. Reads `AGENT_STATE.json` + `PROJECT_PULSE.md`
+2. LLM returns JSON decision → executes `dispatch_batch` / `dispatch_reviews` etc.
+3. Checks completion → loops or exits
+
+### Environment Variables
+
+| Variable                   | Purpose                            | Default          |
+| -------------------------- | ---------------------------------- | ---------------- |
+| `CODEAGENT_OPENCODE_AGENT` | Specify OpenCode agent (optional)  | OpenCode default |
+| `CODEAGENT_OPENCODE_MODEL` | Override OpenCode model (optional) | OpenCode config  |
+| `CODEAGENT_NO_TMUX`        | Disable tmux                       | Auto-set on Win  |
+
+### Exit Codes
+
+- `0`: Complete | `1`: Stopped/No progress | `2`: Human decision needed
+
 ## Using Skills
 
 Skills are triggered automatically when you describe your task in natural language:

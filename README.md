@@ -112,6 +112,28 @@ npm install
 npm run dev
 ```
 
+## 自动循环机制
+
+核心入口：[`orchestration_loop.py`](skills/multi-agent-orchestration/scripts/orchestration_loop.py)
+
+通过 `codeagent-wrapper` 调用 LLM 后端（默认 `opencode`），每轮迭代：
+
+1. 读取 `AGENT_STATE.json` + `PROJECT_PULSE.md`
+2. LLM 返回 JSON 决策 → 执行 `dispatch_batch` / `dispatch_reviews` 等动作
+3. 检查完成状态 → 循环或退出
+
+### 环境变量
+
+| 变量                       | 作用                             | 默认值           |
+| -------------------------- | -------------------------------- | ---------------- |
+| `CODEAGENT_OPENCODE_AGENT` | 指定 OpenCode 使用的代理（可选） | OpenCode 默认    |
+| `CODEAGENT_OPENCODE_MODEL` | 覆盖 OpenCode 模型（可选）       | OpenCode 配置    |
+| `CODEAGENT_NO_TMUX`        | 禁用 tmux                        | Windows 自动设置 |
+
+### 退出码
+
+- `0`：完成 | `1`：停止/无进展 | `2`：需人工决策
+
 ## 使用技能
 
 在 Claude Code / OpenCode 中描述任务即可自动触发技能：
