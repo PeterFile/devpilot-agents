@@ -92,5 +92,5 @@ Exit codes:
 
 ## Related
 
-- Go state management code remains in `codeagent-wrapper/` (state.go, state_validation.go, report.go)
+- Go state management code remains in `codeagent-wrapper/internal/wrapper/` (state.go, state_validation.go, report.go)
 - See `docs/workflow-simulation.md` for complete workflow walkthrough

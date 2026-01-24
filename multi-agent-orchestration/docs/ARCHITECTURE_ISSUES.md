@@ -516,7 +516,7 @@ tmux 是这个系统中实现**可视化并行执行**的核心组件。它不�
 
 ### 核心代码组件
 
-#### 1. TmuxManager (`codeagent-wrapper/tmux.go`)
+#### 1. TmuxManager (`codeagent-wrapper/internal/wrapper/tmux.go`)
 
 ```go
 type TmuxManager struct {
@@ -535,7 +535,7 @@ func (tm *TmuxManager) GetOrCreateWindow(name)    // 获取或创建指定窗口
 func (tm *TmuxManager) SendCommand(target, cmd)   // 向目标发送命令
 ```
 
-#### 2. tmuxTaskRunner (`codeagent-wrapper/tmux_execution.go`)
+#### 2. tmuxTaskRunner (`codeagent-wrapper/internal/wrapper/tmux_execution.go`)
 
 ```go
 type tmuxTaskRunner struct {

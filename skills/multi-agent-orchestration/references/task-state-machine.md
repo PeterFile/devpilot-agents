@@ -76,7 +76,7 @@ Task criticality affects the review process:
 
 ## Implementation
 
-State transitions are validated by `state_validation.go` in codeagent-wrapper:
+State transitions are validated by `state_validation.go` in `codeagent-wrapper/internal/wrapper/`:
 
 ```go
 var ValidTransitions = map[string][]string{
@@ -98,4 +98,3 @@ When an invalid transition is attempted:
 2. An error is logged with details
 3. The task status remains unchanged
 4. The caller receives an error response
-
