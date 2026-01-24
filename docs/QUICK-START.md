@@ -6,10 +6,12 @@
 
 ## Prerequisites
 
-| Requirement                | Purpose                 |
-| -------------------------- | ----------------------- |
-| **Go 1.21+**               | Build codeagent-wrapper |
-| **Claude Code / OpenCode** | Trigger skills          |
+| Dependency               | Version | Purpose                 |
+| ------------------------ | ------- | ----------------------- |
+| **Node.js**              | 18+     | Run `npx skills add`    |
+| **Python**               | 3.9+    | Orchestration scripts   |
+| **Go**                   | 1.21+   | Build codeagent-wrapper |
+| **Claude Code/OpenCode** | Latest  | Trigger skills          |
 
 ## Installation
 

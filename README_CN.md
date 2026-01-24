@@ -6,6 +6,26 @@
 
 专为复杂软件工程任务设计的高保真 **多代理编排系统**。借鉴"圆桌会议"哲学，由 **亚瑟王** (编排者) 协调专业代理，大规模地实现、评审并同步代码库变更。
 
+**设计哲学**：通过 **Spec-Driven Development** 将需求拆解为原子任务，每个 Agent 只处理其上下文范围内的工作——无需理解全局，专注执行即可。任务分发给 **Codex CLI** (OpenAI) 和 **Gemini CLI** (Google) 等一线 Coding CLI，借力厂商的模型能力，而非重复造轮子去构建冗余的工具链和 sub-agent。
+
+## 核心亮点
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  kiro-specs                          multi-agent-orchestrator  │
+│  ───────────                         ────────────────────────  │
+│  需求 → 设计 → 任务                   圆桌会议并行执行 tasks.md  │
+│         ↓                                     ↓                 │
+│  .kiro/specs/feature/tasks.md  ──────→  AGENT_STATE.json       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| 阶段            | 说明                                                                |
+| --------------- | ------------------------------------------------------------------- |
+| **1. 规范定义** | `kiro-specs` 引导创建 requirements → design → tasks                 |
+| **2. 圆桌执行** | `multi-agent-orchestrator` 读取 tasks.md，分发给 Codex/Gemini (TDD) |
+| **3. 评审闭环** | 每个任务经历 dispatch → review → fix → consolidate                  |
+
 ## 核心架构：圆桌会议
 
 | 角色                     | 代理     | 职责                                    |
@@ -17,8 +37,12 @@
 
 ## 前置要求
 
-- **Go 1.21+**：编译 `codeagent-wrapper` 必需
-- **Claude Code / OpenCode**：触发技能所需的环境
+| 依赖项                   | 版本   | 用途                     |
+| ------------------------ | ------ | ------------------------ |
+| **Node.js**              | 18+    | 运行 `npx skills add`    |
+| **Python**               | 3.9+   | 编排脚本                 |
+| **Go**                   | 1.21+  | 编译 `codeagent-wrapper` |
+| **Claude Code/OpenCode** | 最新版 | 触发技能                 |
 
 ## 安装步骤
 
@@ -74,6 +98,20 @@ cp -r .opencode/agents/ ~/.config/opencode/agents/
 
 这将添加 **亚瑟王** (编排者) 和 **高文** (决策骑士) 到你的 OpenCode 环境。
 
+## 流程图
+
+[![多代理编排流程图](flowchart.png)](https://peterfile.github.io/devpilot-agents/)
+
+**[查看交互式流程图](https://peterfile.github.io/devpilot-agents/)** - 点击逐步查看动画演示。
+
+`flowchart/` 目录包含源代码。本地运行：
+
+```bash
+cd flowchart
+npm install
+npm run dev
+```
+
 ## 使用技能
 
 在 Claude Code / OpenCode 中描述任务即可自动触发技能：
@@ -103,20 +141,6 @@ cp -r .opencode/agents/ ~/.config/opencode/agents/
 ├── .opencode/agents/                # 代理定义
 ├── codeagent-wrapper/               # Go 执行引擎
 └── docs/                            # 文档
-```
-
-## 流程图
-
-[![多代理编排流程图](flowchart.png)](https://peterfile.github.io/devpilot-agents/)
-
-**[查看交互式流程图](https://peterfile.github.io/devpilot-agents/)** - 点击逐步查看动画演示。
-
-`flowchart/` 目录包含源代码。本地运行：
-
-```bash
-cd flowchart
-npm install
-npm run dev
 ```
 
 ## 文档

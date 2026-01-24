@@ -6,6 +6,26 @@
 
 A high-fidelity **Multi-Agent Orchestration System** for complex software engineering tasks. Uses a "Round Table" philosophy where **King Arthur** (orchestrator) coordinates specialized agents to implement, review, and synchronize codebase changes at scale.
 
+**Design Philosophy**: **Spec-Driven Development** breaks requirements into atomic tasks—each Agent handles only its scoped context, no global understanding needed. Tasks dispatch to first-party Coding CLIs like **Codex CLI** (OpenAI) and **Gemini CLI** (Google), leveraging vendor model capabilities instead of reinventing tool chains or unnecessary sub-agents.
+
+## Key Highlights
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  kiro-specs                          multi-agent-orchestrator  │
+│  ───────────                         ────────────────────────  │
+│  Requirements → Design → Tasks        Round Table executes      │
+│              ↓                               ↓                  │
+│  .kiro/specs/feature/tasks.md  ──────→  AGENT_STATE.json       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| Phase              | Description                                                                 |
+| ------------------ | --------------------------------------------------------------------------- |
+| **1. Define Spec** | `kiro-specs` guides creation of requirements → design → tasks               |
+| **2. Round Table** | `multi-agent-orchestrator` reads tasks.md, dispatches to Codex/Gemini (TDD) |
+| **3. Review Loop** | Each task goes through dispatch → review → fix → consolidate                |
+
 ## Core Architecture: The Round Table
 
 | Role                  | Agent           | Responsibility                                                  |
@@ -17,8 +37,12 @@ A high-fidelity **Multi-Agent Orchestration System** for complex software engine
 
 ## Prerequisites
 
-- **Go 1.21+**: Required to build `codeagent-wrapper`
-- **Claude Code / OpenCode**: Required to trigger skills
+| Dependency               | Version | Purpose                   |
+| ------------------------ | ------- | ------------------------- |
+| **Node.js**              | 18+     | Run `npx skills add`      |
+| **Python**               | 3.9+    | Orchestration scripts     |
+| **Go**                   | 1.21+   | Build `codeagent-wrapper` |
+| **Claude Code/OpenCode** | Latest  | Trigger skills            |
 
 ## Installation
 
@@ -74,6 +98,20 @@ cp -r .opencode/agents/ ~/.config/opencode/agents/
 
 This adds **King Arthur** (orchestrator) and **Gawain** (decision knight) to your OpenCode environment.
 
+## Flowchart
+
+[![Multi-Agent Orchestration Flowchart](flowchart.png)](https://peterfile.github.io/devpilot-agents/)
+
+**[View Interactive Flowchart](https://peterfile.github.io/devpilot-agents/)** - Click through to see each step with animations.
+
+The `flowchart/` directory contains the source code. To run locally:
+
+```bash
+cd flowchart
+npm install
+npm run dev
+```
+
 ## Using Skills
 
 Skills are triggered automatically when you describe your task in natural language:
@@ -103,20 +141,6 @@ Skills are triggered automatically when you describe your task in natural langua
 ├── .opencode/agents/                # Agent definitions
 ├── codeagent-wrapper/               # Go execution engine
 └── docs/                            # Documentation
-```
-
-## Flowchart
-
-[![Multi-Agent Orchestration Flowchart](flowchart.png)](https://peterfile.github.io/devpilot-agents/)
-
-**[View Interactive Flowchart](https://peterfile.github.io/devpilot-agents/)** - Click through to see each step with animations.
-
-The `flowchart/` directory contains the source code. To run locally:
-
-```bash
-cd flowchart
-npm install
-npm run dev
 ```
 
 ## Documentation
