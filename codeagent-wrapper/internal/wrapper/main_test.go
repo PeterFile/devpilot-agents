@@ -2611,6 +2611,7 @@ func TestRunCodexTask_Timeout(t *testing.T) {
 	fake := newFakeCmd(fakeCmdConfig{
 		BlockWait:           true,
 		ReleaseWaitOnSignal: true,
+		KeepStdoutOpen:      true,
 	})
 	newCommandRunner = func(ctx context.Context, name string, args ...string) commandRunner {
 		return fake
