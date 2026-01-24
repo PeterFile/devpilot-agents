@@ -1,0 +1,163 @@
+[中文](README.md) | English
+
+# DevPilot Agents: Multi-Agent Orchestration Framework
+
+> **"Arthur's Excalibur is drawn from the stone... Will you march forth into battle beside your King?"**
+
+A high-fidelity **Multi-Agent Orchestration System** for complex software engineering tasks. Uses a "Round Table" philosophy where **King Arthur** (orchestrator) coordinates specialized agents to implement, review, and synchronize codebase changes at scale.
+
+**Design Philosophy**: **Spec-Driven Development** breaks requirements into atomic tasks—each Agent handles only its scoped context, no global understanding needed. Tasks dispatch to first-party Coding CLIs like **Codex CLI** (OpenAI) and **Gemini CLI** (Google), leveraging vendor model capabilities instead of reinventing tool chains or unnecessary sub-agents.
+
+## Key Highlights
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  kiro-specs                          multi-agent-orchestrator  │
+│  ───────────                         ────────────────────────  │
+│  Requirements → Design → Tasks        Round Table executes      │
+│              ↓                               ↓                  │
+│  .kiro/specs/feature/tasks.md  ──────→  AGENT_STATE.json       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| Phase              | Description                                                                 |
+| ------------------ | --------------------------------------------------------------------------- |
+| **1. Define Spec** | `kiro-specs` guides creation of requirements → design → tasks               |
+| **2. Round Table** | `multi-agent-orchestrator` reads tasks.md, dispatches to Codex/Gemini (TDD) |
+| **3. Review Loop** | Each task goes through dispatch → review → fix → consolidate                |
+
+## Core Architecture: The Round Table
+
+| Role                  | Agent           | Responsibility                                                  |
+| :-------------------- | :-------------- | :-------------------------------------------------------------- |
+| **King Arthur**       | Orchestrator    | Planning, delegation, quality gates, and project sync.          |
+| **Gawain**            | Decision Knight | Inner-loop decision making, strict JSON output, and validation. |
+| **Codex/Gemini**      | Workers         | Distributed execution of code (Codex) and UI (Gemini) tasks.    |
+| **codeagent-wrapper** | Execution Layer | Go runtime that drives backends in parallel.                    |
+
+## Prerequisites
+
+| Dependency               | Version | Purpose                   |
+| ------------------------ | ------- | ------------------------- |
+| **Node.js**              | 18+     | Run `npx skills add`      |
+| **Python**               | 3.9+    | Orchestration scripts     |
+| **Go**                   | 1.21+   | Build `codeagent-wrapper` |
+| **Claude Code/OpenCode** | Latest  | Trigger skills            |
+
+## Installation
+
+### Step 1: Install Skills
+
+```bash
+npx skills add PeterFile/devpilot-agents
+```
+
+This installs all skills from this repository into your agent environment.
+
+### Step 2: Build codeagent-wrapper
+
+```bash
+git clone https://github.com/PeterFile/devpilot-agents.git
+cd devpilot-agents/codeagent-wrapper
+go build -o codeagent-wrapper .
+```
+
+On Windows:
+
+```powershell
+go build -o codeagent-wrapper.exe .
+```
+
+### Step 3: Add to PATH
+
+**Linux/macOS:**
+
+```bash
+export PATH="$PWD:$PATH"
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$env:PATH = "$PWD;$env:PATH"
+```
+
+### Step 4: Configure OpenCode Agents (OpenCode only)
+
+Copy the agent definitions to your project:
+
+```bash
+cp -r .opencode/agents/ <your-project>/.opencode/agents/
+```
+
+Or install globally for all projects:
+
+```bash
+cp -r .opencode/agents/ ~/.config/opencode/agents/
+```
+
+This adds **King Arthur** (orchestrator) and **Gawain** (decision knight) to your OpenCode environment.
+
+## Flowchart
+
+[![Multi-Agent Orchestration Flowchart](flowchart.png)](https://peterfile.github.io/devpilot-agents/)
+
+**[View Interactive Flowchart](https://peterfile.github.io/devpilot-agents/)** - Click through to see each step with animations.
+
+The `flowchart/` directory contains the source code. To run locally:
+
+```bash
+cd flowchart
+npm install
+npm run dev
+```
+
+## Using Skills
+
+Skills are triggered automatically when you describe your task in natural language:
+
+| Trigger Example                                             | Skill                    |
+| ----------------------------------------------------------- | ------------------------ |
+| "Start orchestration from spec at `.kiro/specs/my-feature`" | multi-agent-orchestrator |
+| "Run orchestration for `payment-integration`"               | multi-agent-orchestrator |
+| "Create requirements for a new feature"                     | kiro-specs               |
+| "Help me write tests first"                                 | test-driven-development  |
+
+### Available Skills
+
+| Skill                        | Description                                                   |
+| ---------------------------- | ------------------------------------------------------------- |
+| **multi-agent-orchestrator** | Orchestrate multi-agent workflows from Kiro specs             |
+| **kiro-specs**               | Spec-driven workflow: requirements → design → tasks → execute |
+| **test-driven-development**  | Red-Green-Refactor TDD workflow                               |
+
+## Project Structure
+
+```
+├── skills/
+│   ├── multi-agent-orchestration/   # Core orchestration skill
+│   ├── kiro-specs/                  # Spec-driven workflow skill
+│   └── test-driven-development/     # TDD skill
+├── .opencode/agents/                # Agent definitions
+├── codeagent-wrapper/               # Go execution engine
+└── docs/                            # Documentation
+```
+
+## Documentation
+
+- **[Architecture (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)**: The Round Table agent collaboration.
+- **[Quick Start Guide (docs/QUICK-START.md)](docs/QUICK-START.md)**: Getting started.
+
+## Acknowledgments
+
+This project builds upon the work of several excellent open-source projects:
+
+| Component                | Source                                                |
+| ------------------------ | ----------------------------------------------------- |
+| **codeagent-wrapper**    | [cexll/myclaude](https://github.com/cexll/myclaude)   |
+| **Orchestration Loop**   | [ralph](https://github.com/snarktank/ralph)           |
+| **Skills Specification** | [claude_skills](https://github.com/anthropics/skills) |
+
+---
+
+**Claude Code + Distributed Orchestration = The Future of Autonomous Engineering.**

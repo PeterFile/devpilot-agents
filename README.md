@@ -1,60 +1,60 @@
-[中文版](README_CN.md) | English
+中文 | [English](README_EN.md)
 
-# DevPilot Agents: Multi-Agent Orchestration Framework
+# DevPilot Agents: 多代理编排框架
 
-> **"Arthur's Excalibur is drawn from the stone... Will you march forth into battle beside your King?"**
+> **"亚瑟王的王者之剑已破石而出……你是否愿随王一同奔赴疆场？"**
 
-A high-fidelity **Multi-Agent Orchestration System** for complex software engineering tasks. Uses a "Round Table" philosophy where **King Arthur** (orchestrator) coordinates specialized agents to implement, review, and synchronize codebase changes at scale.
+专为复杂软件工程任务设计的高保真 **多代理编排系统**。借鉴"圆桌会议"哲学，由 **亚瑟王** (编排者) 协调专业代理，大规模地实现、评审并同步代码库变更。
 
-**Design Philosophy**: **Spec-Driven Development** breaks requirements into atomic tasks—each Agent handles only its scoped context, no global understanding needed. Tasks dispatch to first-party Coding CLIs like **Codex CLI** (OpenAI) and **Gemini CLI** (Google), leveraging vendor model capabilities instead of reinventing tool chains or unnecessary sub-agents.
+**设计哲学**：通过 **Spec-Driven Development** 将需求拆解为原子任务，每个 Agent 只处理其上下文范围内的工作——无需理解全局，专注执行即可。任务分发给 **Codex CLI** (OpenAI) 和 **Gemini CLI** (Google) 等一线 Coding CLI，借力厂商的模型能力，而非重复造轮子去构建冗余的工具链和 sub-agent。
 
-## Key Highlights
+## 核心亮点
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  kiro-specs                          multi-agent-orchestrator  │
 │  ───────────                         ────────────────────────  │
-│  Requirements → Design → Tasks        Round Table executes      │
-│              ↓                               ↓                  │
+│  需求 → 设计 → 任务                   圆桌会议并行执行 tasks.md  │
+│         ↓                                     ↓                 │
 │  .kiro/specs/feature/tasks.md  ──────→  AGENT_STATE.json       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-| Phase              | Description                                                                 |
-| ------------------ | --------------------------------------------------------------------------- |
-| **1. Define Spec** | `kiro-specs` guides creation of requirements → design → tasks               |
-| **2. Round Table** | `multi-agent-orchestrator` reads tasks.md, dispatches to Codex/Gemini (TDD) |
-| **3. Review Loop** | Each task goes through dispatch → review → fix → consolidate                |
+| 阶段            | 说明                                                                |
+| --------------- | ------------------------------------------------------------------- |
+| **1. 规范定义** | `kiro-specs` 引导创建 requirements → design → tasks                 |
+| **2. 圆桌执行** | `multi-agent-orchestrator` 读取 tasks.md，分发给 Codex/Gemini (TDD) |
+| **3. 评审闭环** | 每个任务经历 dispatch → review → fix → consolidate                  |
 
-## Core Architecture: The Round Table
+## 核心架构：圆桌会议
 
-| Role                  | Agent           | Responsibility                                                  |
-| :-------------------- | :-------------- | :-------------------------------------------------------------- |
-| **King Arthur**       | Orchestrator    | Planning, delegation, quality gates, and project sync.          |
-| **Gawain**            | Decision Knight | Inner-loop decision making, strict JSON output, and validation. |
-| **Codex/Gemini**      | Workers         | Distributed execution of code (Codex) and UI (Gemini) tasks.    |
-| **codeagent-wrapper** | Execution Layer | Go runtime that drives backends in parallel.                    |
+| 角色                     | 代理     | 职责                                    |
+| :----------------------- | :------- | :-------------------------------------- |
+| **亚瑟王 (King Arthur)** | 编排者   | 规划、授权、质量门禁及项目状态同步。    |
+| **高文 (Gawain)**        | 决策骑士 | 内环决策、严格的 JSON 输出及逻辑验证。  |
+| **Codex/Gemini**         | 执行者   | 分布式执行代码 (Codex) 与 UI (Gemini)。 |
+| **codeagent-wrapper**    | 执行层   | 驱动后端并行运行的 Go 运行时。          |
 
-## Prerequisites
+## 前置要求
 
-| Dependency               | Version | Purpose                   |
-| ------------------------ | ------- | ------------------------- |
-| **Node.js**              | 18+     | Run `npx skills add`      |
-| **Python**               | 3.9+    | Orchestration scripts     |
-| **Go**                   | 1.21+   | Build `codeagent-wrapper` |
-| **Claude Code/OpenCode** | Latest  | Trigger skills            |
+| 依赖项                   | 版本   | 用途                     |
+| ------------------------ | ------ | ------------------------ |
+| **Node.js**              | 18+    | 运行 `npx skills add`    |
+| **Python**               | 3.9+   | 编排脚本                 |
+| **Go**                   | 1.21+  | 编译 `codeagent-wrapper` |
+| **Claude Code/OpenCode** | 最新版 | 触发技能                 |
 
-## Installation
+## 安装步骤
 
-### Step 1: Install Skills
+### 步骤 1：安装技能
 
 ```bash
 npx skills add PeterFile/devpilot-agents
 ```
 
-This installs all skills from this repository into your agent environment.
+此命令将本仓库的所有技能安装到你的代理环境中。
 
-### Step 2: Build codeagent-wrapper
+### 步骤 2：编译 codeagent-wrapper
 
 ```bash
 git clone https://github.com/PeterFile/devpilot-agents.git
@@ -62,49 +62,49 @@ cd devpilot-agents/codeagent-wrapper
 go build -o codeagent-wrapper .
 ```
 
-On Windows:
+Windows：
 
 ```powershell
 go build -o codeagent-wrapper.exe .
 ```
 
-### Step 3: Add to PATH
+### 步骤 3：添加到 PATH
 
-**Linux/macOS:**
+**Linux/macOS：**
 
 ```bash
 export PATH="$PWD:$PATH"
 ```
 
-**Windows (PowerShell):**
+**Windows (PowerShell)：**
 
 ```powershell
 $env:PATH = "$PWD;$env:PATH"
 ```
 
-### Step 4: Configure OpenCode Agents (OpenCode only)
+### 步骤 4：配置 OpenCode 代理（仅 OpenCode）
 
-Copy the agent definitions to your project:
+将代理定义复制到你的项目：
 
 ```bash
-cp -r .opencode/agents/ <your-project>/.opencode/agents/
+cp -r .opencode/agents/ <你的项目>/.opencode/agents/
 ```
 
-Or install globally for all projects:
+或全局安装（对所有项目生效）：
 
 ```bash
 cp -r .opencode/agents/ ~/.config/opencode/agents/
 ```
 
-This adds **King Arthur** (orchestrator) and **Gawain** (decision knight) to your OpenCode environment.
+这将添加 **亚瑟王** (编排者) 和 **高文** (决策骑士) 到你的 OpenCode 环境。
 
-## Flowchart
+## 流程图
 
-[![Multi-Agent Orchestration Flowchart](flowchart.png)](https://peterfile.github.io/devpilot-agents/)
+[![多代理编排流程图](flowchart.png)](https://peterfile.github.io/devpilot-agents/)
 
-**[View Interactive Flowchart](https://peterfile.github.io/devpilot-agents/)** - Click through to see each step with animations.
+**[查看交互式流程图](https://peterfile.github.io/devpilot-agents/)** - 点击逐步查看动画演示。
 
-The `flowchart/` directory contains the source code. To run locally:
+`flowchart/` 目录包含源代码。本地运行：
 
 ```bash
 cd flowchart
@@ -112,52 +112,52 @@ npm install
 npm run dev
 ```
 
-## Using Skills
+## 使用技能
 
-Skills are triggered automatically when you describe your task in natural language:
+在 Claude Code / OpenCode 中描述任务即可自动触发技能：
 
-| Trigger Example                                             | Skill                    |
+| 触发示例                                                    | 技能                     |
 | ----------------------------------------------------------- | ------------------------ |
 | "Start orchestration from spec at `.kiro/specs/my-feature`" | multi-agent-orchestrator |
 | "Run orchestration for `payment-integration`"               | multi-agent-orchestrator |
 | "Create requirements for a new feature"                     | kiro-specs               |
 | "Help me write tests first"                                 | test-driven-development  |
 
-### Available Skills
+### 可用技能
 
-| Skill                        | Description                                                   |
-| ---------------------------- | ------------------------------------------------------------- |
-| **multi-agent-orchestrator** | Orchestrate multi-agent workflows from Kiro specs             |
-| **kiro-specs**               | Spec-driven workflow: requirements → design → tasks → execute |
-| **test-driven-development**  | Red-Green-Refactor TDD workflow                               |
+| 技能                         | 描述                                      |
+| ---------------------------- | ----------------------------------------- |
+| **multi-agent-orchestrator** | 从 Kiro 规范编排多代理工作流              |
+| **kiro-specs**               | 规范驱动工作流：需求 → 设计 → 任务 → 执行 |
+| **test-driven-development**  | 红-绿-重构 TDD 工作流                     |
 
-## Project Structure
+## 项目结构
 
 ```
 ├── skills/
-│   ├── multi-agent-orchestration/   # Core orchestration skill
-│   ├── kiro-specs/                  # Spec-driven workflow skill
-│   └── test-driven-development/     # TDD skill
-├── .opencode/agents/                # Agent definitions
-├── codeagent-wrapper/               # Go execution engine
-└── docs/                            # Documentation
+│   ├── multi-agent-orchestration/   # 核心编排技能
+│   ├── kiro-specs/                  # 规格驱动工作流技能
+│   └── test-driven-development/     # TDD 技能
+├── .opencode/agents/                # 代理定义
+├── codeagent-wrapper/               # Go 执行引擎
+└── docs/                            # 文档
 ```
 
-## Documentation
+## 文档
 
-- **[Architecture (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)**: The Round Table agent collaboration.
-- **[Quick Start Guide (docs/QUICK-START.md)](docs/QUICK-START.md)**: Getting started.
+- **[架构说明 (docs/ARCHITECTURE_CN.md)](docs/ARCHITECTURE_CN.md)**：圆桌会议代理协作机制。
+- **[快速开始 (docs/QUICK-START_CN.md)](docs/QUICK-START_CN.md)**：入门指南。
 
-## Acknowledgments
+## 致谢
 
-This project builds upon the work of several excellent open-source projects:
+本项目基于以下优秀开源项目构建：
 
-| Component                | Source                                                |
-| ------------------------ | ----------------------------------------------------- |
-| **codeagent-wrapper**    | [cexll/myclaude](https://github.com/cexll/myclaude)   |
-| **Orchestration Loop**   | [ralph](https://github.com/snarktank/ralph)           |
-| **Skills Specification** | [claude_skills](https://github.com/anthropics/skills) |
+| 组件                  | 来源                                                  |
+| --------------------- | ----------------------------------------------------- |
+| **codeagent-wrapper** | [cexll/myclaude](https://github.com/cexll/myclaude)   |
+| **编排循环思路**      | [ralph](https://github.com/snarktank/ralph)           |
+| **Skills 规范**       | [claude_skills](https://github.com/anthropics/skills) |
 
 ---
 
-**Claude Code + Distributed Orchestration = The Future of Autonomous Engineering.**
+**Claude Code + 分布式编排 = 自主工程的未来。**
