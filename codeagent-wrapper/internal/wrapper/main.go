@@ -14,8 +14,9 @@ import (
 	"time"
 )
 
+var version = "5.4.0"
+
 const (
-	version               = "5.4.0"
 	defaultWorkdir        = "."
 	defaultTimeout        = 7200 // seconds (2 hours)
 	defaultCoverageTarget = 90.0
@@ -33,6 +34,13 @@ const (
 )
 
 var useASCIIMode = os.Getenv("CODEAGENT_ASCII_MODE") == "true"
+
+func SetVersion(v string) {
+	if v == "" {
+		return
+	}
+	version = v
+}
 
 // Test hooks for dependency injection
 var (
