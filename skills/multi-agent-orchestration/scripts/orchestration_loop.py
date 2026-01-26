@@ -232,12 +232,20 @@ def _build_assignment_prompt(paths: RunnerPaths) -> str:
     return (
         "You are generating dispatch assignments for multi-agent orchestration.\n\n"
         "Inputs:\n"
-        f"- @{paths.state_file.as_posix()}\n"
-        f"- @{paths.tasks_file.as_posix()}\n\n"
+        f"- @{paths.tasks_file.as_posix()}\n"
+        f"- @{paths.state_file.as_posix()}\n\n"
         "Rules:\n"
         "- Only assign Dispatch Units (parent tasks or standalone tasks).\n"
         "- Do NOT assign leaf tasks with parents.\n"
-        "- owner_agent: codex | gemini | codex-review\n"
+        "- Analyze each task's description and details to determine:\n"
+        "  - type: Infer from task semantics:\n"
+        "    - code -> Backend logic, API, database, scripts, algorithms\n"
+        "    - ui -> Frontend, React/Vue components, CSS, pages, forms, styling\n"
+        "    - review -> Code review, audit, property testing\n"
+        "  - owner_agent: Based on type:\n"
+        "    - codex -> code tasks\n"
+        "    - gemini -> ui tasks\n"
+        "    - codex-review -> review tasks\n"
         "- target_window: task-<task_id> or grouped names (max 9)\n"
         "- criticality: standard | complex | security-sensitive\n"
         "- writes/reads: list of files (best-effort)\n\n"
@@ -246,6 +254,7 @@ def _build_assignment_prompt(paths: RunnerPaths) -> str:
         '  "dispatch_units": [\n'
         "    {\n"
         '      "task_id": "1",\n'
+        '      "type": "code",\n'
         '      "owner_agent": "codex",\n'
         '      "target_window": "task-1",\n'
         '      "criticality": "standard",\n'
@@ -258,28 +267,6 @@ def _build_assignment_prompt(paths: RunnerPaths) -> str:
         "  }\n"
         "}\n"
     )
-
-
-def _fallback_assign_dispatch(state_path: Path) -> None:
-    state = _read_json(state_path)
-    for task in state.get("tasks", []):
-        if not isinstance(task, dict):
-            continue
-        if not _is_dispatch_unit(task):
-            continue
-        if task.get("is_optional", False):
-            continue
-        if task.get("owner_agent"):
-            continue
-        t = str(task.get("type") or "code")
-        if t == "ui":
-            task["owner_agent"] = "gemini"
-        elif t == "review":
-            task["owner_agent"] = "codex-review"
-        else:
-            task["owner_agent"] = "codex"
-    _write_json(state_path, state)
-
 
 def _ensure_assignments(
     *,
@@ -295,8 +282,7 @@ def _ensure_assignments(
         return
 
     if not paths.tasks_file:
-        _fallback_assign_dispatch(paths.state_file)
-        return
+        raise FileNotFoundError("TASKS_PARSED.json is required for assign_dispatch (pass --tasks or init via --spec)")
 
     prompt = _build_assignment_prompt(paths)
     try:
@@ -328,7 +314,7 @@ def _apply_assignments(state_path: Path, assignments: Dict[str, Any]) -> Dict[st
         task = task_map[task_id]
         if not _is_dispatch_unit(task):
             continue
-        for key in ["owner_agent", "target_window", "criticality", "writes", "reads"]:
+        for key in ["type", "owner_agent", "target_window", "criticality", "writes", "reads"]:
             if key in entry and entry[key] is not None:
                 task[key] = entry[key]
 
@@ -631,11 +617,14 @@ def run_loop_deterministic(
     return 1
 
 
-def _init_from_spec(spec_path: Path, *, session_name: str, cwd: Path) -> RunnerPaths:
+def _init_from_spec(spec_path: Path, *, session_name: str, output_dir: Optional[str], cwd: Path) -> RunnerPaths:
     scripts_dir = Path(__file__).parent
+    args = [str(spec_path), "--session", session_name, "--mode", "codex"]
+    if output_dir:
+        args += ["--output", output_dir]
     payload = _run_python_script(
         scripts_dir / "init_orchestration.py",
-        [str(spec_path), "--session", session_name, "--mode", "codex"],
+        args,
         cwd=cwd,
     )
     if not payload.get("success"):
@@ -652,6 +641,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--pulse", help="Path to PROJECT_PULSE.md (optional)", type=str)
     parser.add_argument("--workdir", help="Working directory for dispatch/review scripts", default=".", type=str)
     parser.add_argument("--session", help="Session name for init_orchestration (when using --spec)", default="roundtable", type=str)
+    parser.add_argument(
+        "--output",
+        help="Output directory for AGENT_STATE.json/TASKS_PARSED.json/PROJECT_PULSE.md when using --spec (default: spec parent directory)",
+        default=None,
+        type=str,
+    )
     parser.add_argument("--backend", help="Backend for orchestrator (codex/claude/gemini/opencode)", default="opencode", type=str)
     parser.add_argument("--assign-backend", help="Backend for assign_dispatch (codex/claude/gemini/opencode; default: codex)", default="codex", type=str)
     parser.add_argument("--max-iterations", default=50, type=int)
@@ -666,8 +661,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         os.environ["CODEAGENT_NO_TMUX"] = "1"
 
     if args.spec:
-        paths = _init_from_spec(Path(args.spec), session_name=args.session, cwd=workdir)
+        paths = _init_from_spec(Path(args.spec), session_name=args.session, output_dir=args.output, cwd=workdir)
     else:
+        if args.output:
+            raise SystemExit("--output requires --spec")
         state_file = Path(args.state).resolve()
         tasks_file = Path(args.tasks).resolve() if args.tasks else None
         pulse_file = Path(args.pulse).resolve() if args.pulse else None

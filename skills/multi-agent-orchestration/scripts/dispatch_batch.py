@@ -44,7 +44,7 @@ from spec_parser import (
 from fix_loop import process_fix_loop, get_fix_required_tasks, on_fix_task_complete, rollback_fix_dispatch
 
 # Import codeagent-wrapper helpers (PATH/local bin resolution; tmux fallback)
-from codeagent_wrapper_utils import resolve_codeagent_wrapper, looks_like_tmux_missing
+from codeagent_wrapper_utils import resolve_codex_timeout_seconds, resolve_codeagent_wrapper, looks_like_tmux_missing
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -1008,6 +1008,8 @@ def invoke_codeagent_wrapper(
     if use_tmux:
         cmd = base_cmd + ["--tmux-session", session_name, "--tmux-no-main-window", "--state-file", state_file]
 
+    timeout_seconds = resolve_codex_timeout_seconds()
+
     try:
         result = subprocess.run(
             cmd,
@@ -1015,7 +1017,7 @@ def invoke_codeagent_wrapper(
             capture_output=True,
             text=True,
             env=cmd_env,
-            timeout=3600,  # 1 hour timeout
+            timeout=timeout_seconds,
         )
         if use_tmux and result.returncode != 0:
             combined = (result.stderr or "") + "\n" + (result.stdout or "")
@@ -1027,7 +1029,7 @@ def invoke_codeagent_wrapper(
                     capture_output=True,
                     text=True,
                     env=cmd_env,
-                    timeout=3600,
+                    timeout=timeout_seconds,
                 )
             elif _looks_like_tmux_connect_error(combined):
                 tmpdir = _ensure_tmux_tmpdir(cmd_env)
@@ -1039,7 +1041,7 @@ def invoke_codeagent_wrapper(
                         capture_output=True,
                         text=True,
                         env=cmd_env,
-                        timeout=3600,
+                        timeout=timeout_seconds,
                     )
                     if result.returncode != 0:
                         combined = (result.stderr or "") + "\n" + (result.stdout or "")
@@ -1051,7 +1053,7 @@ def invoke_codeagent_wrapper(
                                 capture_output=True,
                                 text=True,
                                 env=cmd_env,
-                                timeout=3600,
+                                timeout=timeout_seconds,
                             )
 
         # Parse output as JSON if possible
@@ -1078,7 +1080,7 @@ def invoke_codeagent_wrapper(
             success=False,
             tasks_completed=0,
             tasks_failed=len(configs),
-            errors=["Execution timed out after 1 hour"]
+            errors=[f"Execution timed out after {timeout_seconds} seconds"]
         )
     except FileNotFoundError:
         return ExecutionReport(

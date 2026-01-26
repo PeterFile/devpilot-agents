@@ -25,6 +25,12 @@ codeagent-wrapper - [working_dir] <<'EOF'
 EOF
 ```
 
+**Sanity check (verify CLI is current):**
+```bash
+codeagent-wrapper --version
+codeagent-wrapper --help
+```
+
 **With backend selection**:
 ```bash
 codeagent-wrapper --backend claude - <<'EOF'
@@ -46,6 +52,8 @@ codeagent-wrapper --backend gemini "simple task"
 | claude | `--backend claude` | Anthropic Claude | Simple tasks, documentation, prompts |
 | gemini | `--backend gemini` | Google Gemini | UI/UX development, frontend components |
 | opencode | `--backend opencode` | OpenCode CLI (`opencode run`) | Agent-driven runs, inner-loop orchestration decisions |
+
+⚠️ `opencode` backend does **NOT** support stdin input; prompts are passed as CLI args. Prefer short prompts + `@path` file references.
 
 ### Backend Selection Guide
 
@@ -88,8 +96,14 @@ For orchestrated workflows, use this backend assignment:
 - `working_dir` (optional): Working directory (default: current)
 - `--backend` (optional): Select AI backend (codex/claude/gemini, default: codex)
   - **Note**: Claude backend only adds `--dangerously-skip-permissions` when explicitly enabled
+- `--skip-permissions` / `--dangerously-skip-permissions`: For Claude backend only; disables permission prompts (use sparingly)
 - `--tmux-session` (optional): Enable tmux visualization mode for parallel execution
+- `--tmux-attach` (optional): Attach to tmux session after completion
+- `--tmux-no-main-window` (optional): Remove default `main` window in tmux sessions
+- `--window-for` (optional): Single-task mode only; route output to an existing task window
 - `--state-file` (optional): Path to AGENT_STATE.json for real-time status updates
+- `--review` (optional): Mark tasks as review tasks for state updates
+- `--cleanup`: Remove old wrapper logs
 
 ## Return Format
 
@@ -184,10 +198,15 @@ Set `CODEAGENT_MAX_PARALLEL_WORKERS` to limit concurrent tasks (default: unlimit
 ## Environment Variables
 
 - `CODEX_TIMEOUT`: Override timeout in milliseconds (default: 7200000 = 2 hours)
+- `CODEAGENT_ASCII_MODE`: Use ASCII symbols instead of Unicode (PASS/WARN/FAIL)
 - `CODEAGENT_SKIP_PERMISSIONS`: Control Claude CLI permission checks
   - For **Claude** backend: Set to `true`/`1` to add `--dangerously-skip-permissions` (default: disabled)
   - For **Codex/Gemini** backends: Currently has no effect
+- `CODEAGENT_OPENCODE_AGENT`: OpenCode agent name (used by `--backend opencode`)
+- `CODEAGENT_OPENCODE_MODEL`: OpenCode model name (used by `--backend opencode`)
 - `CODEAGENT_MAX_PARALLEL_WORKERS`: Limit concurrent tasks in parallel mode (default: unlimited, recommended: 8)
+
+🔒 `CODEX_BYPASS_SANDBOX=true` (Codex backend): bypasses approvals/sandbox in Codex CLI. Use only in trusted environments.
 
 ## Invocation Pattern
 

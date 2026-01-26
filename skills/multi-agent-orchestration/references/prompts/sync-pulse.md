@@ -17,7 +17,7 @@ When syncing state to PULSE, follow these steps:
 
 ### Step 1: Read Current State
 ```bash
-python skills/multi-agent-orchestrator/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md --dry-run
+python skills/multi-agent-orchestration/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md --dry-run
 ```
 
 ### Step 2: Update Mental Model Section
@@ -97,7 +97,7 @@ Active implementation of user management module.
 
 ### Step 6: Write Updated PULSE
 ```bash
-python skills/multi-agent-orchestrator/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
+python skills/multi-agent-orchestration/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
 ```
 
 ## Example Usage
@@ -108,7 +108,7 @@ python skills/multi-agent-orchestrator/scripts/sync_pulse.py AGENT_STATE.json PR
 
 ### Script
 ```bash
-python skills/multi-agent-orchestrator/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
+python skills/multi-agent-orchestration/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
 ```
 
 ### Programmatic

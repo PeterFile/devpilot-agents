@@ -442,19 +442,19 @@ var validStateTransitions = map[string]map[string]struct{}{
 
 ```bash
 # 1. 初始化
-python multi-agent-orchestration/skill/scripts/init_orchestration.py \
+python skills/multi-agent-orchestration/scripts/init_orchestration.py \
     .kiro/specs/my-feature --session my-feature --mode codex --json
 
 # 2. Codex 填充 AGENT_STATE.json 中的 owner_agent/target_window
 
 # 3. 分发任务
-python multi-agent-orchestration/skill/scripts/dispatch_batch.py AGENT_STATE.json
+python skills/multi-agent-orchestration/scripts/dispatch_batch.py <state_file>
 
 # 4. 分发审查
-python multi-agent-orchestration/skill/scripts/dispatch_reviews.py AGENT_STATE.json
+python skills/multi-agent-orchestration/scripts/dispatch_reviews.py <state_file>
 
 # 5. 同步 PULSE
-python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
+python skills/multi-agent-orchestration/scripts/sync_pulse.py <state_file> <pulse_file>
 
 # 6. 检查完成状态，重复 3-5 直到所有任务完成
 ```

@@ -1411,7 +1411,6 @@ func TestRunBuildCodexArgs_NewMode(t *testing.T) {
 	args := buildCodexArgs(cfg, "my task")
 	expected := []string{
 		"e",
-		"--model", "gpt-5.2-codex",
 		"--skip-git-repo-check",
 		"-C", "/test/dir",
 		"--json",
@@ -1436,7 +1435,6 @@ func TestRunBuildCodexArgs_ResumeMode(t *testing.T) {
 	args := buildCodexArgs(cfg, "-")
 	expected := []string{
 		"e",
-		"--model", "gpt-5.2-codex",
 		"--skip-git-repo-check",
 		"--json",
 		"resume",
@@ -1460,7 +1458,7 @@ func TestRunBuildCodexArgs_ResumeMode_EmptySessionHandledGracefully(t *testing.T
 
 	cfg := &Config{Mode: "resume", SessionID: "   ", WorkDir: "/test/dir"}
 	args := buildCodexArgs(cfg, "task")
-	expected := []string{"e", "--model", "gpt-5.2-codex", "--skip-git-repo-check", "-C", "/test/dir", "--json", "task"}
+	expected := []string{"e", "--skip-git-repo-check", "-C", "/test/dir", "--json", "task"}
 	if len(args) != len(expected) {
 		t.Fatalf("len mismatch")
 	}
@@ -1569,7 +1567,6 @@ func TestBackendBuildArgs_CodexBackend(t *testing.T) {
 	got := backend.BuildArgs(cfg, "task")
 	want := []string{
 		"e",
-		"--model", "gpt-5.2-codex",
 		"--skip-git-repo-check",
 		"-C", "/test/dir",
 		"--json",

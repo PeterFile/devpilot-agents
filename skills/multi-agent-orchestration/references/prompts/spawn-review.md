@@ -62,7 +62,7 @@ Produce a Review Finding with severity: critical, major, minor, or none.
 
 ### Step 5: Invoke codeagent-wrapper
 ```bash
-python skills/multi-agent-orchestrator/scripts/dispatch_reviews.py AGENT_STATE.json --task-id <task_id>
+python skills/multi-agent-orchestration/scripts/dispatch_reviews.py AGENT_STATE.json --task-id <task_id>
 ```
 
 Or directly:
@@ -89,7 +89,7 @@ EOF
 
 ### Script
 ```bash
-python skills/multi-agent-orchestrator/scripts/dispatch_reviews.py AGENT_STATE.json --task-id task-001
+python skills/multi-agent-orchestration/scripts/dispatch_reviews.py AGENT_STATE.json --task-id task-001
 ```
 
 ### Programmatic

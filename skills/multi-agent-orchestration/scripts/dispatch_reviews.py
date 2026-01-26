@@ -30,6 +30,7 @@ from codeagent_wrapper_utils import (
     ensure_tmux_tmpdir,
     looks_like_tmux_connect_error,
     looks_like_tmux_missing,
+    resolve_codex_timeout_seconds,
     resolve_codeagent_wrapper,
     tmux_enabled,
 )
@@ -356,6 +357,8 @@ def invoke_codeagent_wrapper(
             "--review",  # Flag to indicate review mode
         ]
     
+    timeout_seconds = resolve_codex_timeout_seconds()
+
     try:
         result = subprocess.run(
             cmd,
@@ -363,7 +366,7 @@ def invoke_codeagent_wrapper(
             capture_output=True,
             text=True,
             env=cmd_env,
-            timeout=3600,  # 1 hour timeout
+            timeout=timeout_seconds,
         )
 
         if use_tmux and result.returncode != 0:
@@ -375,7 +378,7 @@ def invoke_codeagent_wrapper(
                     capture_output=True,
                     text=True,
                     env=cmd_env,
-                    timeout=3600,
+                    timeout=timeout_seconds,
                 )
             elif looks_like_tmux_connect_error(combined):
                 tmpdir = ensure_tmux_tmpdir(cmd_env)
@@ -386,7 +389,7 @@ def invoke_codeagent_wrapper(
                         capture_output=True,
                         text=True,
                         env=cmd_env,
-                        timeout=3600,
+                        timeout=timeout_seconds,
                     )
                     if result.returncode != 0:
                         combined = (result.stderr or "") + "\n" + (result.stdout or "")
@@ -397,7 +400,7 @@ def invoke_codeagent_wrapper(
                                 capture_output=True,
                                 text=True,
                                 env=cmd_env,
-                                timeout=3600,
+                                timeout=timeout_seconds,
                             )
         
         # Parse output as JSON if possible
@@ -423,7 +426,7 @@ def invoke_codeagent_wrapper(
             success=False,
             reviews_completed=0,
             reviews_failed=len(configs),
-            errors=["Review execution timed out after 1 hour"]
+            errors=[f"Review execution timed out after {timeout_seconds} seconds"]
         )
     except FileNotFoundError:
         return ReviewReport(
