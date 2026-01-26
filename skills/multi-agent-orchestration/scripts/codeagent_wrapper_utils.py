@@ -18,6 +18,27 @@ def tmux_enabled() -> bool:
     return not _env_truthy("CODEAGENT_NO_TMUX")
 
 
+def resolve_codex_timeout_seconds(*, default_seconds: int = 7200, buffer_seconds: int = 300) -> int:
+    """
+    Resolve a safe subprocess timeout for invoking codeagent-wrapper.
+
+    - Mirrors codeagent-wrapper's `CODEX_TIMEOUT` parsing:
+      - values > 10000 are treated as milliseconds
+      - otherwise treated as seconds
+    - Adds a small buffer so the wrapper can exit cleanly.
+    """
+    raw = os.environ.get("CODEX_TIMEOUT", "").strip()
+    timeout_seconds = default_seconds
+    if raw:
+        try:
+            parsed = int(raw)
+            if parsed > 0:
+                timeout_seconds = parsed // 1000 if parsed > 10000 else parsed
+        except ValueError:
+            timeout_seconds = default_seconds
+    return max(60, timeout_seconds) + max(0, buffer_seconds)
+
+
 def _candidate_wrapper_names() -> Sequence[str]:
     if sys.platform.startswith("win"):
         return ("codeagent-wrapper.exe", "codeagent-wrapper")
@@ -47,9 +68,12 @@ def resolve_codeagent_wrapper() -> str:
     for root in search_roots:
         for base in (root, *root.parents):
             for name in names:
-                candidate = base / "bin" / name
-                if _is_executable(candidate):
-                    return str(candidate)
+                for candidate in (
+                    base / "codeagent-wrapper" / name,  # local build: repo/codeagent-wrapper/codeagent-wrapper(.exe)
+                    base / "bin" / name,  # legacy layout: repo/bin/codeagent-wrapper(.exe)
+                ):
+                    if _is_executable(candidate):
+                        return str(candidate)
 
     home_bins = [
         Path.home() / ".claude" / "bin",

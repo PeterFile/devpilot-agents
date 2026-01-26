@@ -46,36 +46,37 @@ python install.py --module orchestration
 
 ```bash
 # Step 1: Initialize (scaffold)
-python multi-agent-orchestration/skill/scripts/init_orchestration.py /path/to/spec --session my-feature --mode codex
+python skills/multi-agent-orchestration/scripts/init_orchestration.py /path/to/spec --session my-feature --mode codex
 # Outputs TASKS_PARSED.json, AGENT_STATE.json (scaffold), PROJECT_PULSE.md (template)
+# Note: outputs default to <spec_path>/..; to write into CWD, add: --output .
 
 # Step 2: AI Decision (required)
 # Populate AGENT_STATE.json with owner_agent/target_window/criticality
 # Update PROJECT_PULSE.md with Mental Model
 
 # Step 3: Dispatch tasks
-python multi-agent-orchestration/skill/scripts/dispatch_batch.py AGENT_STATE.json
+python skills/multi-agent-orchestration/scripts/dispatch_batch.py <state_file>
 
 # Step 4: Dispatch reviews
-python multi-agent-orchestration/skill/scripts/dispatch_reviews.py AGENT_STATE.json
+python skills/multi-agent-orchestration/scripts/dispatch_reviews.py <state_file>
 
 # Step 5: Consolidate reviews (final reports / fix loop)
-python multi-agent-orchestration/skill/scripts/consolidate_reviews.py AGENT_STATE.json
+python skills/multi-agent-orchestration/scripts/consolidate_reviews.py <state_file>
 
 # Step 6: Sync status
-python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
+python skills/multi-agent-orchestration/scripts/sync_pulse.py <state_file> <pulse_file>
 ```
 
 ### One-Command Loop Runner (Default)
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --assign-backend codex
+python skills/multi-agent-orchestration/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --assign-backend codex
 ```
 
 ### Deterministic Loop Runner
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --mode deterministic --assign-backend codex
+python skills/multi-agent-orchestration/scripts/orchestration_loop.py --spec /path/to/spec --workdir . --mode deterministic --assign-backend codex
 ```
 
 Exit codes:

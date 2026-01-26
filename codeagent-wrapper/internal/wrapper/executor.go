@@ -749,8 +749,6 @@ func buildCodexArgs(cfg *Config, targetArg string) []string {
 
 	args := []string{"e"}
 
-	args = append(args, "--model", "gpt-5.2-codex")
-
 	if envFlagEnabled("CODEX_BYPASS_SANDBOX") {
 		logWarn("CODEX_BYPASS_SANDBOX=true: running without approval/sandbox protection")
 		args = append(args, "--dangerously-bypass-approvals-and-sandbox")

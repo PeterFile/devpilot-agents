@@ -18,6 +18,7 @@ Investigating: $1
 ## Strategy
 
 !`python e:/claude/coding-agent-flow/skills/multi-agent-orchestration/scripts/fix_loop.py --task-id auto --analyze "$1"`
+<!-- timeout: 7200000 -->
 
 > [!NOTE]
 > This command leverages the same logic as the automated fix loop but allows for manual, targeted debugging of specific issues.
