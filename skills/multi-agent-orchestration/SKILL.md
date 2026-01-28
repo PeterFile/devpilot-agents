@@ -1,5 +1,5 @@
 ---
-name: multi-agent-orchestrator
+name: multi-agent-orchestration
 description: Orchestrate multi-agent workflows from a Kiro spec using codex (code) + Gemini (UI), including dispatch/review/state sync via AGENT_STATE.json + PROJECT_PULSE.md; triggers on user says "Start orchestration from spec at <path>", "Run orchestration for <feature>", or mentions multi-agent execution.
 license: MIT
 ---
@@ -75,7 +75,11 @@ Run the entire workflow in a single blocking command (no user click / no manual 
 
 ```bash
 python scripts/orchestration_loop.py --spec <spec_path> --workdir . --assign-backend codex
+# Note: state files default to <spec_path>/.. (e.g. .kiro/specs/). To write into CWD, add: --output .
 ```
+
+**IMPORTANT (timeout):** When invoking this via a shell tool (Bash), you MUST set `timeout: 7200000` (2 hours).
+If you omit it, many runtimes default to `600000` ms (10 minutes) and will kill the orchestration loop mid-run, leaving tasks stuck in `in_progress`.
 
 This command will:
 
@@ -98,6 +102,7 @@ Use the shell command tool to parse/validate:
 
 ```bash
 python scripts/init_orchestration.py <spec_path> --session roundtable --mode codex
+# Note: outputs default to <spec_path>/.. (e.g. .kiro/specs/). To write into CWD, add: --output .
 ```
 
 This creates:
@@ -189,7 +194,7 @@ WHILE there are dispatch units not in "completed" status:
 #### 2a. Dispatch Ready Tasks
 
 ```bash
-python scripts/dispatch_batch.py AGENT_STATE.json
+python scripts/dispatch_batch.py <state_file>
 ```
 
 This:
@@ -201,7 +206,7 @@ This:
 #### 2b. Dispatch Reviews
 
 ```bash
-python scripts/dispatch_reviews.py AGENT_STATE.json
+python scripts/dispatch_reviews.py <state_file>
 ```
 
 This:
@@ -213,7 +218,7 @@ This:
 #### 2c. Consolidate Reviews
 
 ```bash
-python scripts/consolidate_reviews.py AGENT_STATE.json
+python scripts/consolidate_reviews.py <state_file>
 ```
 
 This:
@@ -224,14 +229,14 @@ This:
 #### 2d. Sync to PULSE
 
 ```bash
-python scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
+python scripts/sync_pulse.py <state_file> <pulse_file>
 ```
 
 #### 2e. Check Completion Status
 
 ```bash
 # Check if any tasks are NOT completed
-cat AGENT_STATE.json | python -c "import json,sys; d=json.load(sys.stdin); tasks=d.get('tasks',[]); units=[t for t in tasks if t.get('subtasks') or (not t.get('parent_id') and not t.get('subtasks'))]; incomplete=[t['task_id'] for t in units if t.get('status')!='completed']; print(f'Incomplete dispatch units: {len(incomplete)}/{len(units)}'); [print(f'  - {tid}') for tid in incomplete[:5]]"
+cat <state_file> | python -c "import json,sys; d=json.load(sys.stdin); tasks=d.get('tasks',[]); units=[t for t in tasks if t.get('subtasks') or (not t.get('parent_id') and not t.get('subtasks'))]; incomplete=[t['task_id'] for t in units if t.get('status')!='completed']; print(f'Incomplete dispatch units: {len(incomplete)}/{len(units)}'); [print(f'  - {tid}') for tid in incomplete[:5]]"
 ```
 
 **Decision Point:**
@@ -375,7 +380,7 @@ User: "Start orchestration from spec at .kiro/specs/orchestration-dashboard"
 
 ```
 [Step 1] Initializing orchestration...
-> python init_orchestration.py .kiro/specs/orchestration-dashboard --session roundtable
+> python init_orchestration.py .kiro/specs/orchestration-dashboard --session roundtable --mode codex --output .
 ✅ Created TASKS_PARSED.json
 ✅ Created AGENT_STATE.json (scaffold)
 ✅ Created PROJECT_PULSE.md (template)

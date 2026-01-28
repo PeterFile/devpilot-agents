@@ -10,6 +10,7 @@ Synchronizing state from `AGENT_STATE.json` to `PROJECT_PULSE.md`...
 ## Execution
 
 !`python e:/claude/coding-agent-flow/skills/multi-agent-orchestration/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md`
+<!-- timeout: 7200000 -->
 
 ## Outcome
 

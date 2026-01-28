@@ -18,20 +18,21 @@
 
 ## 快速开始
 
-注：Skill 安装后脚本位于 `~/.codex/skills/<skill>/scripts/` 或 `~/.claude/skills/<skill>/scripts/`；本仓库源代码位于 `multi-agent-orchestration/skill/scripts/`。
+注：Skill 安装后脚本位于 `~/.codex/skills/<skill>/scripts/` 或 `~/.claude/skills/<skill>/scripts/`；本仓库源代码位于 `skills/multi-agent-orchestration/scripts/`。
 
 ### 1) 初始化
 
 运行：
 
 ```bash
-python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path> --session roundtable --mode codex --json
+python skills/multi-agent-orchestration/scripts/init_orchestration.py <spec_path> --session roundtable --mode codex --json
+# 默认输出到 <spec_path>/..（例如 .kiro/specs/）。如需输出到当前目录，加：--output .
 ```
 
 拿到输出中的：
-- AGENT_STATE.json
-- TASKS_PARSED.json
-- PROJECT_PULSE.md
+- state_file（AGENT_STATE.json）
+- tasks_file（TASKS_PARSED.json）
+- pulse_file（PROJECT_PULSE.md）
 
 ### 1b) 一键自动循环（llm，默认，推荐给 opencode CLI）
 
@@ -40,13 +41,14 @@ python multi-agent-orchestration/skill/scripts/init_orchestration.py <spec_path>
 从 spec 一键启动：
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --assign-backend codex --max-iterations 50 --sleep 1
+python skills/multi-agent-orchestration/scripts/orchestration_loop.py --spec <spec_path> --workdir . --assign-backend codex --max-iterations 50 --sleep 1
+# 可选：--output .（把 state/pulse/tasks 写到当前目录，便于用 AGENT_STATE.json 这种相对路径）
 ```
 
 从已有 state 恢复：
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGENT_STATE.json --pulse PROJECT_PULSE.md --tasks TASKS_PARSED.json --workdir . --assign-backend codex
+python skills/multi-agent-orchestration/scripts/orchestration_loop.py --state <state_file> --pulse <pulse_file> --tasks <tasks_file> --workdir . --assign-backend codex
 ```
 
 默认值：
@@ -60,13 +62,14 @@ python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGE
 从 spec 一键启动：
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --spec <spec_path> --workdir . --mode deterministic --assign-backend codex --max-iterations 50 --sleep 1
+python skills/multi-agent-orchestration/scripts/orchestration_loop.py --spec <spec_path> --workdir . --mode deterministic --assign-backend codex --max-iterations 50 --sleep 1
+# 可选：--output .（把 state/pulse/tasks 写到当前目录）
 ```
 
 从已有 state 恢复：
 
 ```bash
-python multi-agent-orchestration/skill/scripts/orchestration_loop.py --state AGENT_STATE.json --pulse PROJECT_PULSE.md --tasks TASKS_PARSED.json --workdir . --mode deterministic --assign-backend codex
+python skills/multi-agent-orchestration/scripts/orchestration_loop.py --state <state_file> --pulse <pulse_file> --tasks <tasks_file> --workdir . --mode deterministic --assign-backend codex
 ```
 
 退出码：
@@ -146,16 +149,16 @@ EOF
 ### 3) 调度循环
 
 ```bash
-python multi-agent-orchestration/skill/scripts/dispatch_batch.py AGENT_STATE.json
-python multi-agent-orchestration/skill/scripts/dispatch_reviews.py AGENT_STATE.json
-python multi-agent-orchestration/skill/scripts/consolidate_reviews.py AGENT_STATE.json
-python multi-agent-orchestration/skill/scripts/sync_pulse.py AGENT_STATE.json PROJECT_PULSE.md
+python skills/multi-agent-orchestration/scripts/dispatch_batch.py <state_file>
+python skills/multi-agent-orchestration/scripts/dispatch_reviews.py <state_file>
+python skills/multi-agent-orchestration/scripts/consolidate_reviews.py <state_file>
+python skills/multi-agent-orchestration/scripts/sync_pulse.py <state_file> <pulse_file>
 ```
 
 检查是否完成（未完成则重复调度循环）：
 
 ```bash
-python -c "import json; d=json.load(open('AGENT_STATE.json')); tasks=d.get('tasks',[]); units=[t for t in tasks if t.get('subtasks') or (not t.get('parent_id') and not t.get('subtasks'))]; incomplete=[t for t in units if t.get('status')!='completed']; print(f'Incomplete dispatch units: {len(incomplete)}/{len(units)}')"
+python -c "import json,sys; d=json.load(open(sys.argv[1])); tasks=d.get('tasks',[]); units=[t for t in tasks if t.get('subtasks') or (not t.get('parent_id') and not t.get('subtasks'))]; incomplete=[t for t in units if t.get('status')!='completed']; print(f'Incomplete dispatch units: {len(incomplete)}/{len(units)}')" <state_file>
 ```
 
 ## 并行执行规则

@@ -85,6 +85,17 @@ def test_apply_assignments_updates_dispatch_units_only(tmp_path: Path):
     assert state["window_mapping"]["1"] == "task-1"
 
 
+def test_ensure_assignments_requires_tasks_file_when_missing_owner_agents(tmp_path: Path):
+    state_path = tmp_path / "AGENT_STATE.json"
+    pulse_path = tmp_path / "PROJECT_PULSE.md"
+    loop._write_json(state_path, {"tasks": [{"task_id": "1", "status": "not_started"}]})
+    pulse_path.write_text("# pulse\n", encoding="utf-8")
+
+    paths = loop.RunnerPaths(state_file=state_path, tasks_file=None, pulse_file=pulse_path)
+    with pytest.raises(FileNotFoundError):
+        loop._ensure_assignments(assign_backend="codex", paths=paths, workdir=tmp_path)
+
+
 def test_validate_decision_rejects_unknown_action():
     with pytest.raises(ValueError):
         loop._validate_decision({"decision": "CONTINUE", "actions": [{"type": "rm_rf"}]})

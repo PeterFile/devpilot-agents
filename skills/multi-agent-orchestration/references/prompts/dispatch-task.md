@@ -17,7 +17,7 @@ When dispatching a task, follow these steps:
 
 ### Step 1: Load State
 ```bash
-python skills/multi-agent-orchestrator/scripts/dispatch_batch.py AGENT_STATE.json --task-id <task_id> --dry-run
+python skills/multi-agent-orchestration/scripts/dispatch_batch.py AGENT_STATE.json --task-id <task_id> --dry-run
 ```
 
 ### Step 2: Validate Dependencies
@@ -66,7 +66,7 @@ EOF
 
 ### Script
 ```bash
-python skills/multi-agent-orchestrator/scripts/dispatch_batch.py AGENT_STATE.json --task-id task-001
+python skills/multi-agent-orchestration/scripts/dispatch_batch.py AGENT_STATE.json --task-id task-001
 ```
 
 ### Programmatic

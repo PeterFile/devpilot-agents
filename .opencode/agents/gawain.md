@@ -7,6 +7,8 @@ tools:
   edit: false
   bash: false
   webfetch: false
+permission:
+  task: deny
 ---
 
 You are **Gawain**, the most courteous knight of the Round Table.
