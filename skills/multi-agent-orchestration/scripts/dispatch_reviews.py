@@ -260,6 +260,87 @@ def build_review_content(
     return "\n".join(lines)
 
 
+def build_batch_review_content(
+    tasks: List[Dict[str, Any]],
+    spec_path: str,
+    all_tasks: Optional[List[Dict[str, Any]]] = None
+) -> str:
+    """
+    Build batch review content for multiple tasks.
+    
+    Combines all pending review tasks into a single prompt for one agent.
+    Reduces API calls from N to 1.
+    """
+    task_map = {t.get("task_id"): t for t in all_tasks} if all_tasks else {}
+    
+    lines = [
+        "# Batch Code Review",
+        "",
+        f"Review the following {len(tasks)} tasks.",
+        "For each task, provide a review finding with severity assessment.",
+        "",
+        "## Reference Documents",
+        f"- Requirements: {spec_path}/requirements.md",
+        f"- Design: {spec_path}/design.md",
+        "",
+        "---",
+        "",
+    ]
+    
+    for idx, task in enumerate(tasks, start=1):
+        task_id = task.get("task_id", "unknown")
+        description = task.get("description", "No description")
+        files_changed = task.get("files_changed", [])
+        output = task.get("output", "")
+        subtask_ids = task.get("subtasks", [])
+        
+        lines.append(f"## Task {idx}: {task_id}")
+        lines.append(f"**Description**: {description}")
+        lines.append("")
+        
+        if subtask_ids and task_map:
+            lines.append("### Subtasks")
+            for sid in sorted(subtask_ids, key=_task_id_sort_key):
+                subtask = task_map.get(sid, {})
+                subtask_desc = subtask.get("description", "No description")
+                subtask_files = subtask.get("files_changed", [])
+                lines.append(f"- **{sid}**: {subtask_desc}")
+                if subtask_files:
+                    lines.append(f"  Files: {', '.join(subtask_files)}")
+            lines.append("")
+        elif files_changed:
+            lines.append("### Files Changed")
+            for f in files_changed:
+                lines.append(f"- {f}")
+            lines.append("")
+        
+        if output:
+            lines.append("### Output Summary")
+            lines.append(output[:300])
+            lines.append("")
+        
+        lines.append("---")
+        lines.append("")
+    
+    lines.extend([
+        "## Output Format",
+        "",
+        "Provide your review as JSON array:",
+        "```json",
+        "[",
+        "  {",
+        '    "task_id": "1",',
+        '    "severity": "critical|major|minor|none",',
+        '    "summary": "Brief summary",',
+        '    "issues": []',
+        "  }",
+        "]",
+        "```",
+    ])
+    
+    return "\n".join(lines)
+
+
 def build_review_configs(
     tasks: List[Dict[str, Any]],
     spec_path: str,
@@ -542,7 +623,8 @@ def update_completed_reviews_to_final(state: Dict[str, Any]) -> List[str]:
 def dispatch_reviews(
     state_file: str,
     workdir: str = ".",
-    dry_run: bool = False
+    dry_run: bool = False,
+    batch: bool = False
 ) -> ReviewDispatchResult:
     """
     Dispatch review tasks for completed work.
@@ -583,8 +665,23 @@ def dispatch_reviews(
     # Build review configs
     spec_path = state.get("spec_path", ".")
     session_name = state.get("session_name", "roundtable")
-    configs = build_review_configs(pending_tasks, spec_path, workdir, all_tasks=state.get("tasks", []))
     task_ids = [t["task_id"] for t in pending_tasks]
+    
+    if batch:
+        # Batch mode: single agent reviews all tasks
+        batch_content = build_batch_review_content(pending_tasks, spec_path, all_tasks=state.get("tasks", []))
+        configs = [ReviewTaskConfig(
+            review_id="batch-review",
+            task_id="batch",
+            backend="codex",
+            workdir=workdir,
+            content=batch_content,
+            reviewer_index=1,
+            dependencies=[],
+        )]
+    else:
+        # Standard mode: one agent per task
+        configs = build_review_configs(pending_tasks, spec_path, workdir, all_tasks=state.get("tasks", []))
     
     # Invoke codeagent-wrapper (don't update state until we know result)
     report = invoke_codeagent_wrapper(
@@ -668,13 +765,19 @@ def main():
         action="store_true",
         help="Output result as JSON"
     )
+    parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Batch mode: single agent reviews all tasks (reduces API calls)"
+    )
     
     args = parser.parse_args()
     
     result = dispatch_reviews(
         args.state_file,
         workdir=args.workdir,
-        dry_run=args.dry_run
+        dry_run=args.dry_run,
+        batch=args.batch
     )
     
     if args.json:

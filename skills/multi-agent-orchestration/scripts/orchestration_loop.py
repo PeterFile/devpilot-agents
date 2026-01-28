@@ -461,7 +461,7 @@ def run_loop_llm(
             if t == "dispatch_reviews":
                 payload = _run_python_script(
                     scripts_dir / "dispatch_reviews.py",
-                    [str(paths.state_file), "--workdir", str(workdir)],
+                    [str(paths.state_file), "--workdir", str(workdir), "--batch"],
                     cwd=workdir,
                 )
                 recent_events.append({"iteration": iteration, "action": t, "success": bool(payload.get("success")), "message": payload.get("message")})
@@ -570,7 +570,7 @@ def run_loop_deterministic(
 
         payload = _run_python_script(
             scripts_dir / "dispatch_reviews.py",
-            [str(paths.state_file), "--workdir", str(workdir)],
+            [str(paths.state_file), "--workdir", str(workdir), "--batch"],
             cwd=workdir,
         )
         print(f"[loop] dispatch_reviews: {payload.get('message')}")
