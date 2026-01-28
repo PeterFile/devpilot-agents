@@ -244,6 +244,26 @@ cat <state_file> | python -c "import json,sys; d=json.load(sys.stdin); tasks=d.g
 - If incomplete tasks > 0: **CONTINUE LOOP** (go back to 2a)
 - If incomplete tasks == 0: **PROCEED TO STEP 3**
 
+### Step 2f: **Add valuable learnings** - If you discovered something future developers/agents should know:
+   - API patterns or conventions specific to that module
+   - Gotchas or non-obvious requirements
+   - Dependencies between files
+   - Testing approaches for that area
+   - Configuration or environment requirements
+
+**Examples of good AGENTS.md additions:**
+- "When modifying X, also update Y to keep them in sync"
+- "This module uses pattern Z for all API calls"
+- "Tests require the dev server running on PORT 3000"
+- "Field names must match the template exactly"
+
+**Do NOT add:**
+- Story-specific implementation details
+- Temporary debugging notes
+- Information already in progress.txt
+
+Only update AGENTS.md if you have **genuinely reusable knowledge** that would help future work in that directory.
+
 ### Step 3: Completion Summary [AUTOMATIC]
 
 When all tasks are completed, provide a summary:
