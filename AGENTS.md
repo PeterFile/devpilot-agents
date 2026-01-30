@@ -53,3 +53,10 @@ The orchestration workflow follows: init → dispatch → review → consolidate
 2. Dispatch tasks to Codex (code) or Gemini (UI) backends
 3. Review changes with codex-review
 4. Consolidate and sync to `PROJECT_PULSE.md`
+
+## Notes / Gotchas
+
+- `codeagent-wrapper --window-for` only affects tmux mode; it requires `--tmux-session`.
+- OpenCode assignment agents (e.g. `gawain`) are tool-less; prompts must include `@path` file references (e.g. `@.kiro/specs/<spec>/tasks.md`) so the backend can see inputs.
+- `skills/sequential-orchestration/scripts/sequential_loop.py` writes the dispatch unit **and its descendant task IDs** into `SEQUENTIAL_STATE.json` so dependency checks work.
+- `skills/sequential-orchestration/runner.sh` is a thin wrapper over `skills/sequential-orchestration/scripts/sequential_loop.py` (for bash users).
