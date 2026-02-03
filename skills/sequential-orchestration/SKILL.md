@@ -52,19 +52,17 @@ python scripts/sequential_loop.py \
     --delay 15 \
     --max-iterations 50 \
     --backend opencode \
-    --assign-backend opencode \
-    --assign-opencode-agent gawain \
+    --assign-backend codex \
     --tmux-session sequential-my-feature
 ```
 
-| Parameter             | Description                      |
-| --------------------- | -------------------------------- |
-| `--delay 15`          | 15s between tasks (throttled)    |
-| `--max-iterations 50` | Max 50 iterations (~35 subtasks) |
-| `--backend opencode`  | Use opencode agent               |
-| `--assign-backend`    | Backend for assignment (optional) |
-| `--assign-opencode-agent` | OpenCode agent for assignment (`gawain`) |
-| `--tmux-session`      | tmux session name (optional)     |
+| Parameter             | Description                                |
+| --------------------- | ------------------------------------------ |
+| `--delay 15`          | 15s between tasks (throttled)              |
+| `--max-iterations 50` | Max 50 iterations (~35 subtasks)           |
+| `--backend opencode`  | Use opencode agent for execution           |
+| `--assign-backend`    | Backend for assignment (codex recommended) |
+| `--tmux-session`      | tmux session name (optional)               |
 
 **IMPORTANT (timeout):** When invoking via shell tool, set `timeout: 7200000` (2 hours).
 
@@ -135,10 +133,10 @@ This is not negotiable. This is not optional.
 
 ### Red Flags - STOP if you think:
 
-| Thought                           | Reality                            |
-| --------------------------------- | ---------------------------------- |
-| "This is simple, no skill needed" | Simple becomes complex. Use skill. |
-| "Let me write code first"         | TDD means test BEFORE code.        |
+| Thought                           | Reality                              |
+| --------------------------------- | ------------------------------------ |
+| "This is simple, no skill needed" | Simple becomes complex. Use skill.   |
+| "Let me write code first"         | TDD means test BEFORE code.          |
 | "I'll add tests later"            | Later = never. RED->GREEN->REFACTOR. |
 
 ### Skill Types
