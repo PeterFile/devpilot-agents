@@ -1,0 +1,160 @@
+.stats-panel {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  min-width: 280px;
+  background: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border);
+}
+
+.stats-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stats-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.stats-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--color-bg-primary);
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card.error {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.stat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--color-bg-tertiary);
+}
+
+.stat-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+}
+
+.stat-count {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.expand-icon {
+  color: var(--color-text-tertiary);
+  transition: transform 0.2s ease;
+}
+
+.stat-items {
+  list-style: none;
+  padding: 0 16px 14px 16px;
+  margin: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.stat-item {
+  padding: 8px 0;
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--color-text-secondary);
+  border-bottom: 1px dashed var(--color-border);
+  word-break: break-all;
+}
+
+.stat-item:last-child {
+  border-bottom: none;
+}
+
+.stat-item.more {
+  font-family: inherit;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+/* Test Card specific */
+.test-card .stat-header {
+  padding-bottom: 8px;
+}
+
+.test-progress {
+  padding: 0 16px 14px 16px;
+}
+
+.progress-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--color-bg-tertiary);
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.progress-fill.passed {
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.progress-fill.failed {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.test-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.passed-count {
+  color: #22c55e;
+}
+
+.failed-count {
+  color: #ef4444;
+}

@@ -1,0 +1,178 @@
+/* 
+ * Tmux Event Dashboard - Global Styles
+ * 
+ * Premium dark theme with glassmorphism and smooth animations.
+ */
+
+/* CSS Variables - Dark Theme */
+:root {
+  /* Backgrounds */
+  --color-bg-primary: #0f0f13;
+  --color-bg-secondary: #16161d;
+  --color-bg-tertiary: #1e1e28;
+  --color-bg-hover: #252530;
+  --color-bg-code: #1a1a24;
+  
+  /* Text */
+  --color-text-primary: #e8e8ed;
+  --color-text-secondary: #a0a0b0;
+  --color-text-tertiary: #606070;
+  
+  /* Borders */
+  --color-border: #2a2a38;
+  --color-border-hover: #3a3a4a;
+  
+  /* Accent */
+  --color-accent: #6366f1;
+  --color-accent-dim: rgba(99, 102, 241, 0.15);
+  
+  /* Event Types */
+  --color-message: #8b5cf6;
+  --color-tool: #3b82f6;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-status: #f59e0b;
+  --color-test: #06b6d4;
+  --color-file: #ec4899;
+  --color-command: #f97316;
+  --color-warning: #eab308;
+  
+  /* Code */
+  --color-code: #e0e0f0;
+  
+  /* Fonts */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* Reset & Base */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* Dashboard Layout */
+.dashboard {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+}
+
+/* Error Banner */
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  background: rgba(239, 68, 68, 0.15);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-accent);
+  color: white;
+}
+
+/* Focus */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Buttons */
+button {
+  font-family: inherit;
+}
+
+/* Links */
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Code */
+code, pre {
+  font-family: var(--font-mono);
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Utility classes */
+.loading {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
